@@ -149,6 +149,10 @@ const Index = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-2">
+                  <Label>Weight (kg)</Label>
+                  <Input placeholder="e.g. 4.5" type="number" min="0" step="0.1" />
+                </div>
                 </div>
               </div>
 
