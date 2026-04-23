@@ -3,7 +3,6 @@ import logo from "@/assets/logo.png";
 
 const Footer = () => (
   <footer className="bg-clinic-navy text-clinic-blue-light relative overflow-hidden">
-    <img src={logo} alt="" className="absolute opacity-[0.05] w-[400px] h-[400px] object-contain pointer-events-none -right-20 -top-20" />
     <div className="container mx-auto px-4 py-8 relative">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">

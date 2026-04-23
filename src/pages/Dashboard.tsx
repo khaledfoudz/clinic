@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Search, PawPrint, Phone, MapPin, Calendar, Stethoscope, ChevronDown, ChevronUp } from "lucide-react";
+// Dashboard.tsx
+import { useState, useEffect } from "react";
+import { Search, PawPrint, Phone, Calendar, Stethoscope, ChevronDown, ChevronUp, Pencil, FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,108 +8,82 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
+import EditModal from "./EditModal";
 
-const sampleRecords = [
-  {
-    id: 1,
-    petName: "Buddy",
-    type: "Dog",
-    gender: "Male",
-    birthdate: "2020-03-15",
-    spayedNeutered: "Yes",
-    ownerName: "Ahmed Mohamed",
-    mobile: "+20 100 123 4567",
-    address: "15 El-Tahrir St, Cairo",
-    diseaseHistory: "Skin allergy — treated with antihistamines",
-    vaccinationHistory: "Rabies (2024), DHPP (2024), Bordetella (2023)",
-    todayExam: "Full body examination, blood work",
-    diagnosis: "Mild ear infection (left ear)",
-    treatment: "Ear drops — Otomax, 2x daily for 10 days",
-    followUp: "2026-04-25",
-  },
-  {
-    id: 2,
-    petName: "Luna",
-    type: "Cat",
-    gender: "Female",
-    birthdate: "2021-07-10",
-    spayedNeutered: "Yes",
-    ownerName: "Sara Khalil",
-    mobile: "+20 111 987 6543",
-    address: "22 Nasr City, Cairo",
-    diseaseHistory: "No prior diseases",
-    vaccinationHistory: "FVRCP (2024), Rabies (2024)",
-    todayExam: "Routine checkup, dental exam",
-    diagnosis: "Mild tartar buildup",
-    treatment: "Dental cleaning recommended, dental diet advised",
-    followUp: "2026-05-10",
-  },
-  {
-    id: 3,
-    petName: "Max",
-    type: "Dog",
-    gender: "Male",
-    birthdate: "2019-01-22",
-    spayedNeutered: "No",
-    ownerName: "Omar Hassan",
-    mobile: "+20 122 555 8899",
-    address: "8 Maadi, Cairo",
-    diseaseHistory: "Hip dysplasia — managed with supplements",
-    vaccinationHistory: "Rabies (2025), DHPP (2025)",
-    todayExam: "X-ray of hips, mobility assessment",
-    diagnosis: "Progressive hip dysplasia, Grade II",
-    treatment: "Glucosamine supplement, weight management plan",
-    followUp: "2026-05-01",
-  },
-  {
-    id: 4,
-    petName: "Milo",
-    type: "Cat",
-    gender: "Male",
-    birthdate: "2022-11-05",
-    spayedNeutered: "Yes",
-    ownerName: "Sara Khalil",
-    mobile: "+20 111 987 6543",
-    address: "22 Nasr City, Cairo",
-    diseaseHistory: "Feline lower urinary tract disease (FLUTD)",
-    vaccinationHistory: "FVRCP (2024)",
-    todayExam: "Urinalysis, abdominal palpation",
-    diagnosis: "Recurrent FLUTD episode",
-    treatment: "Prescription urinary diet, increased water intake",
-    followUp: "2026-04-20",
-  },
-  {
-    id: 5,
-    petName: "Bella",
-    type: "Dog",
-    gender: "Female",
-    birthdate: "2023-05-18",
-    spayedNeutered: "No",
-    ownerName: "Nadia Fathi",
-    mobile: "+20 100 222 3344",
-    address: "5 Heliopolis, Cairo",
-    diseaseHistory: "Parvovirus — recovered (2023)",
-    vaccinationHistory: "Rabies (2025), DHPP (2025), Bordetella (2025)",
-    todayExam: "Vaccination booster, general checkup",
-    diagnosis: "Healthy — no issues found",
-    treatment: "Booster vaccines administered",
-    followUp: "2026-10-18",
-  },
-];
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+
+interface Record {
+  id: number;
+  pet_name: string;
+  type: string;
+  gender: string;
+  birth_date: string;
+  age: string;
+  spayed_neutered: string;
+  owner_name: string;
+  mobile_number: string;
+  address: string;
+  disease_history: string;
+  vaccination_history: string;
+  diagnostics_url: string;
+  what_was_done_today: string;
+  diagnosis: string;
+  treatment: string;
+  today_visit_url: string;
+  follow_up_date: string;
+  weight_kg: number;
+  created_at: string;
+}
 
 const Dashboard = () => {
+  const [records, setRecords] = useState<Record[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchType, setSearchType] = useState("petName");
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
 
-  const filtered = sampleRecords.filter((r) => {
+  // Fetch records
+  const fetchRecords = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/clinic-records`);
+      if (!response.ok) throw new Error("Failed to fetch records");
+      const result = await response.json();
+      setRecords(result.data);
+    } catch (error) {
+      toast.error("Failed to load records");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecords();
+  }, []);
+
+  const handleEdit = (id: number) => {
+    setSelectedRecordId(id);
+    setEditModalOpen(true);
+  };
+
+  const filtered = records.filter((r) => {
     const q = searchQuery.toLowerCase();
     if (!q) return true;
-    if (searchType === "petName") return r.petName.toLowerCase().includes(q);
-    if (searchType === "ownerName") return r.ownerName.toLowerCase().includes(q);
-    if (searchType === "mobile") return r.mobile.includes(q);
+    if (searchType === "petName") return r.pet_name?.toLowerCase().includes(q);
+    if (searchType === "ownerName") return r.owner_name?.toLowerCase().includes(q);
+    if (searchType === "mobile") return r.mobile_number?.includes(q);
     return true;
   });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading records...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -172,6 +147,8 @@ const Dashboard = () => {
                   <TableHead className="font-semibold">Mobile</TableHead>
                   <TableHead className="font-semibold">Diagnosis</TableHead>
                   <TableHead className="font-semibold">Follow-up</TableHead>
+                  <TableHead className="font-semibold">Created</TableHead>
+                  <TableHead className="w-10"></TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -186,21 +163,41 @@ const Dashboard = () => {
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <PawPrint size={14} className="text-primary" />
-                          {r.petName}
+                          {r.pet_name}
                         </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="font-normal">
-                          {r.type === "Cat" ? "🐱" : "🐶"} {r.type}
+                          {r.type === "Cat" || r.type === "cat" ? "🐱" : "🐶"} {r.type}
                         </Badge>
                       </TableCell>
-                      <TableCell>{r.ownerName}</TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{r.mobile}</TableCell>
-                      <TableCell className="max-w-[200px] truncate text-sm">{r.diagnosis}</TableCell>
+                      <TableCell>{r.owner_name}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{r.mobile_number}</TableCell>
+                      <TableCell className="max-w-[200px] truncate text-sm">{r.diagnosis || "—"}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="font-normal text-xs">
-                          {r.followUp}
-                        </Badge>
+                        {r.follow_up_date ? (
+                          <Badge variant="outline" className="font-normal text-xs">
+                            {new Date(r.follow_up_date).toLocaleDateString()}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(r.id);
+                          }}
+                        >
+                          <Pencil size={14} className="text-muted-foreground hover:text-primary" />
+                        </Button>
                       </TableCell>
                       <TableCell>
                         {expandedId === r.id ? (
@@ -212,16 +209,54 @@ const Dashboard = () => {
                     </TableRow>
                     {expandedId === r.id && (
                       <TableRow key={`${r.id}-detail`}>
-                        <TableCell colSpan={7} className="bg-muted/20 p-0">
+                        <TableCell colSpan={9} className="bg-muted/20 p-0">
                           <div className="p-6 grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
                             <DetailBlock label="Gender" value={r.gender} />
-                            <DetailBlock label="Birthdate" value={r.birthdate} />
-                            <DetailBlock label="Spayed/Neutered" value={r.spayedNeutered} />
-                            <DetailBlock label="Address" value={r.address} />
-                            <DetailBlock label="Disease History" value={r.diseaseHistory} />
-                            <DetailBlock label="Vaccination History" value={r.vaccinationHistory} />
-                            <DetailBlock label="Today's Exam" value={r.todayExam} />
-                            <DetailBlock label="Treatment" value={r.treatment} />
+                            <DetailBlock 
+                              label="Birthdate" 
+                              value={r.birth_date ? new Date(r.birth_date).toLocaleDateString() : "—"} 
+                            />
+                            <DetailBlock label="Age" value={r.age || "—"} />
+                            <DetailBlock 
+                              label="Spayed/Neutered" 
+                              value={r.spayed_neutered === "Yes" ? "Yes" : r.spayed_neutered === "No" ? "No" : String(r.spayed_neutered)} 
+                            />
+                            <DetailBlock label="Weight" value={r.weight_kg ? `${r.weight_kg} kg` : "—"} />
+                            <DetailBlock label="Address" value={r.address || "—"} />
+                            <DetailBlock label="Disease History" value={r.disease_history || "—"} />
+                            <DetailBlock label="Vaccination History" value={r.vaccination_history || "—"} />
+                            <DetailBlock label="Today's Exam" value={r.what_was_done_today || "—"} />
+                            <DetailBlock label="Treatment" value={r.treatment || "—"} />
+                            <DetailBlock 
+                              label="Created At" 
+                              value={r.created_at ? new Date(r.created_at).toLocaleString() : "—"} 
+                            />
+                            {r.diagnostics_url && (
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Diagnostics PDF</p>
+                                <a 
+                                  href={`${API_BASE}/${r.diagnostics_url}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline flex items-center gap-1 text-sm"
+                                >
+                                  <FileText size={14} /> View PDF
+                                </a>
+                              </div>
+                            )}
+                            {r.today_visit_url && (
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Today's Visit PDF</p>
+                                <a 
+                                  href={`${API_BASE}/${r.today_visit_url}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline flex items-center gap-1 text-sm"
+                                >
+                                  <FileText size={14} /> View PDF
+                                </a>
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -248,13 +283,24 @@ const Dashboard = () => {
                         <PawPrint size={18} className="text-primary" />
                       </div>
                       <div>
-                        <p className="font-semibold text-foreground">{r.petName}</p>
-                        <p className="text-xs text-muted-foreground">{r.ownerName}</p>
+                        <p className="font-semibold text-foreground">{r.pet_name}</p>
+                        <p className="text-xs text-muted-foreground">{r.owner_name}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(r.id);
+                        }}
+                      >
+                        <Pencil size={14} className="text-muted-foreground" />
+                      </Button>
                       <Badge variant="secondary" className="text-xs font-normal">
-                        {r.type === "Cat" ? "🐱" : "🐶"} {r.type}
+                        {r.type === "Cat" || r.type === "cat" ? "🐱" : "🐶"} {r.type}
                       </Badge>
                       {expandedId === r.id ? (
                         <ChevronUp size={16} className="text-muted-foreground" />
@@ -265,26 +311,66 @@ const Dashboard = () => {
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Badge variant="outline" className="text-xs font-normal">
-                      <Phone size={10} className="mr-1" /> {r.mobile}
+                      <Phone size={10} className="mr-1" /> {r.mobile_number}
                     </Badge>
-                    <Badge variant="outline" className="text-xs font-normal">
-                      <Calendar size={10} className="mr-1" /> {r.followUp}
-                    </Badge>
+                    {r.follow_up_date && (
+                      <Badge variant="outline" className="text-xs font-normal">
+                        <Calendar size={10} className="mr-1" /> {new Date(r.follow_up_date).toLocaleDateString()}
+                      </Badge>
+                    )}
                   </div>
                 </button>
 
                 {expandedId === r.id && (
                   <div className="border-t border-border p-4 bg-muted/20 space-y-3">
-                    <DetailBlock label="Gender" value={`${r.gender} · ${r.spayedNeutered === "Yes" ? "Spayed/Neutered" : "Intact"}`} />
-                    <DetailBlock label="Birthdate" value={r.birthdate} />
-                    <DetailBlock label="Address" value={r.address} />
+                    <DetailBlock 
+                      label="Gender" 
+                      value={`${r.gender} · ${r.spayed_neutered === "Yes" ? "Spayed/Neutered" : "Intact"}`} 
+                    />
+                    <DetailBlock 
+                      label="Birthdate" 
+                      value={r.birth_date ? new Date(r.birth_date).toLocaleDateString() : "—"} 
+                    />
+                    <DetailBlock label="Age" value={r.age || "—"} />
+                    <DetailBlock label="Weight" value={r.weight_kg ? `${r.weight_kg} kg` : "—"} />
+                    <DetailBlock label="Address" value={r.address || "—"} />
                     <Separator />
-                    <DetailBlock label="Disease History" value={r.diseaseHistory} />
-                    <DetailBlock label="Vaccination History" value={r.vaccinationHistory} />
+                    <DetailBlock label="Disease History" value={r.disease_history || "—"} />
+                    <DetailBlock label="Vaccination History" value={r.vaccination_history || "—"} />
                     <Separator />
-                    <DetailBlock label="Today's Exam" value={r.todayExam} />
-                    <DetailBlock label="Diagnosis" value={r.diagnosis} />
-                    <DetailBlock label="Treatment" value={r.treatment} />
+                    <DetailBlock label="Today's Exam" value={r.what_was_done_today || "—"} />
+                    <DetailBlock label="Diagnosis" value={r.diagnosis || "—"} />
+                    <DetailBlock label="Treatment" value={r.treatment || "—"} />
+                    <DetailBlock 
+                      label="Created At" 
+                      value={r.created_at ? new Date(r.created_at).toLocaleString() : "—"} 
+                    />
+                    {r.diagnostics_url && (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Diagnostics PDF</p>
+                        <a 
+                          href={`${API_BASE}/${r.diagnostics_url}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline flex items-center gap-1 text-sm"
+                        >
+                          <FileText size={14} /> View PDF
+                        </a>
+                      </div>
+                    )}
+                    {r.today_visit_url && (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Today's Visit PDF</p>
+                        <a 
+                          href={`${API_BASE}/${r.today_visit_url}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline flex items-center gap-1 text-sm"
+                        >
+                          <FileText size={14} /> View PDF
+                        </a>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -299,6 +385,14 @@ const Dashboard = () => {
           </div>
         )}
       </div>
+
+      {/* Edit Modal */}
+      <EditModal
+        recordId={selectedRecordId}
+        isOpen={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        onSuccess={fetchRecords}
+      />
     </div>
   );
 };
