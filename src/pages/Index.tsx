@@ -89,6 +89,27 @@ const defaultPet = (id: number): PetForm => ({
   follow_up_date: undefined,
 });
 
+// Builds a FormData object for one pet (no owner fields inside)
+const buildPetFormData = (pet: PetForm): FormData => {
+  const fd = new FormData();
+  fd.append("pet_name", pet.pet_name);
+  if (pet.birth_date) fd.append("birth_date", format(pet.birth_date, "yyyy-MM-dd"));
+  fd.append("age", pet.age);
+  if (pet.type)   fd.append("type",   pet.type.charAt(0).toUpperCase()   + pet.type.slice(1));
+  if (pet.gender) fd.append("gender", pet.gender.charAt(0).toUpperCase() + pet.gender.slice(1));
+  if (pet.spayed_neutered) fd.append("spayed_neutered", pet.spayed_neutered === "yes" ? "Yes" : "No");
+  if (pet.weight_kg)           fd.append("weight_kg",           pet.weight_kg);
+  if (pet.disease_history)     fd.append("disease_history",     pet.disease_history);
+  if (pet.vaccination_history) fd.append("vaccination_history", pet.vaccination_history);
+  if (pet.what_was_done_today) fd.append("what_was_done_today", pet.what_was_done_today);
+  if (pet.diagnosis)           fd.append("diagnosis",           pet.diagnosis);
+  if (pet.treatment)           fd.append("treatment",           pet.treatment);
+  if (pet.follow_up_date)      fd.append("follow_up_date",      format(pet.follow_up_date, "yyyy-MM-dd"));
+  if (pet.diagnostics_file)    fd.append("diagnostics",         pet.diagnostics_file);
+  if (pet.today_visit_file)    fd.append("today_visit",         pet.today_visit_file);
+  return fd;
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const Index = () => {
@@ -161,7 +182,7 @@ const Index = () => {
 
   const handleNext = () => {
     if (step === 1) {
-      if (!owner.owner_name.trim()) { toast.error("Owner name is required"); return; }
+      if (!owner.owner_name.trim())    { toast.error("Owner name is required"); return; }
       if (!owner.mobile_number.trim()) { toast.error("Mobile number is required"); return; }
       setStep(2);
     } else if (step === 2) {
@@ -179,57 +200,57 @@ const Index = () => {
   };
 
   // ── Submit ─────────────────────────────────────────────────────────────────
+  // 1. POST /api/owners  →  owner info + first pet  →  get back owner_id
+  // 2. For each extra pet: POST /api/owners/:owner_id/pets
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-
     try {
-      const requests = pets.map(async (pet) => {
-        const formData = new FormData();
-        
-        formData.append("owner_name", owner.owner_name);
-        formData.append("mobile_number", owner.mobile_number);
-        formData.append("address", owner.address);
-        
-        formData.append("pet_name", pet.pet_name);
-        if (pet.birth_date) formData.append("birth_date", format(pet.birth_date, "yyyy-MM-dd"));
-        formData.append("age", pet.age);
-        if (pet.type) formData.append("type", pet.type.charAt(0).toUpperCase() + pet.type.slice(1));
-        if (pet.gender) formData.append("gender", pet.gender.charAt(0).toUpperCase() + pet.gender.slice(1));
-        if (pet.spayed_neutered) formData.append("spayed_neutered", pet.spayed_neutered === "yes" ? "Yes" : "No");
-        if (pet.weight_kg) formData.append("weight_kg", pet.weight_kg);
-        if (pet.disease_history) formData.append("disease_history", pet.disease_history);
-        if (pet.vaccination_history) formData.append("vaccination_history", pet.vaccination_history);
-        if (pet.what_was_done_today) formData.append("what_was_done_today", pet.what_was_done_today);
-        if (pet.diagnosis) formData.append("diagnosis", pet.diagnosis);
-        if (pet.treatment) formData.append("treatment", pet.treatment);
-        if (pet.follow_up_date) formData.append("follow_up_date", format(pet.follow_up_date, "yyyy-MM-dd"));
-        
-        if (pet.diagnostics_file) formData.append("diagnostics", pet.diagnostics_file);
-        if (pet.today_visit_file) formData.append("today_visit", pet.today_visit_file);
+      // ── Step 1: Create owner + first pet ──────────────────────────────
+      const firstFd = buildPetFormData(pets[0]);
+      firstFd.append("owner_name",    owner.owner_name);
+      firstFd.append("mobile_number", owner.mobile_number);
+      firstFd.append("address",       owner.address);
 
-        return fetch(`${API_BASE}/api/clinic-records`, {
-          method: "POST",
-          body: formData,
-        });
+      const firstRes = await fetch(`${API_BASE}/api/owners`, {
+        method: "POST",
+        body: firstFd,
       });
 
-      const responses = await Promise.all(requests);
-      const failed = responses.filter((r) => !r.ok);
-      if (failed.length > 0) {
-        const errorData = await failed[0].json().catch(() => ({}));
-        throw new Error(errorData.error ?? "One or more records failed to save.");
+      if (!firstRes.ok) {
+        const err = await firstRes.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to create record");
       }
 
-      toast.success(`${pets.length} patient record(s) saved successfully!`);
+      const firstData = await firstRes.json();
+      const ownerId: number = firstData.data.id;
+
+      // ── Step 2: Add any additional pets ───────────────────────────────
+      if (pets.length > 1) {
+        const extraRes = await Promise.all(
+          pets.slice(1).map((pet) =>
+            fetch(`${API_BASE}/api/owners/${ownerId}/pets`, {
+              method: "POST",
+              body: buildPetFormData(pet),
+            })
+          )
+        );
+
+        const failed = extraRes.filter((r) => !r.ok);
+        if (failed.length > 0) {
+          const errData = await failed[0].json().catch(() => ({}));
+          throw new Error(errData.error ?? "Failed to save one or more pets");
+        }
+      }
+
+      toast.success(`${pets.length} patient record${pets.length > 1 ? "s" : ""} saved successfully!`);
       setOwner({ owner_name: "", mobile_number: "", address: "" });
       setPets([defaultPet(1)]);
       setNextId(2);
       setStep(1);
       setCurrentPetIndex(0);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Something went wrong.";
-      toast.error(message);
+      toast.error(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
@@ -432,8 +453,12 @@ const Index = () => {
               </div>
               {/* Add Pet Button */}
               <div className="mt-6">
-                <Button variant="outline" onClick={addPet} className="w-full border-dashed border-2 border-primary/30 text-primary">
-                  <Plus size={16} className="mr-2" /> Add Another Pet
+                <Button
+                  variant="outline"
+                  onClick={addPet}
+                  className="w-full border-dashed border-2 border-primary/30 text-primary hover:bg-primary/5 hover:border-primary/50 py-6 text-base"
+                >
+                  <Plus size={20} className="mr-2" /> Add Another Pet for Same Owner
                 </Button>
               </div>
             </CardContent>
@@ -446,9 +471,28 @@ const Index = () => {
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg font-serif">
                 <Stethoscope size={16} className="text-primary" /> Medical History
+                {pets.length > 1 && (
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    — {currentPet.pet_name || `Pet ${currentPetIndex + 1}`}
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {pets.length > 1 && (
+                <div className="flex items-center gap-2 mb-4">
+                  {pets.map((pet, idx) => (
+                    <Button
+                      key={pet.id}
+                      variant={idx === currentPetIndex ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPetIndex(idx)}
+                    >
+                      {pet.pet_name || `Pet ${idx + 1}`}
+                    </Button>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Disease History</Label>
@@ -488,9 +532,28 @@ const Index = () => {
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg font-serif">
                 <ClipboardList size={16} className="text-primary" /> Today's Visit
+                {pets.length > 1 && (
+                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                    — {currentPet.pet_name || `Pet ${currentPetIndex + 1}`}
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {pets.length > 1 && (
+                <div className="flex items-center gap-2 mb-4">
+                  {pets.map((pet, idx) => (
+                    <Button
+                      key={pet.id}
+                      variant={idx === currentPetIndex ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPetIndex(idx)}
+                    >
+                      {pet.pet_name || `Pet ${idx + 1}`}
+                    </Button>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>What was done today</Label>
