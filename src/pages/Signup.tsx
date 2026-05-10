@@ -1,16 +1,61 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import logo from "@/assets/logo.png";
 
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+
 const Signup = () => {
+  const navigate = useNavigate();
+  
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSignup = async () => {
+    // Validation
+    if (!name || !email || !password || !confirm) {
+      toast.error("Please fill all fields");
+      return;
+    }
+    if (password !== confirm) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Signup failed");
+      }
+
+      toast.success("Account created successfully! Please login.");
+      navigate("/login");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Signup failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center bg-background px-4 relative overflow-hidden">
@@ -38,8 +83,13 @@ const Signup = () => {
             <Label>Confirm Password</Label>
             <Input type="password" placeholder="••••••••" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           </div>
-          <Button className="w-full rounded-full bg-accent text-accent-foreground hover:bg-accent/90" size="lg">
-            Sign Up
+          <Button 
+            className="w-full rounded-full bg-accent text-accent-foreground hover:bg-accent/90" 
+            size="lg"
+            onClick={handleSignup}
+            disabled={loading}
+          >
+            {loading ? "Creating Account..." : "Sign Up"}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
             Already have an account?{" "}

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Trash2, User, PawPrint, Stethoscope, ClipboardList, CalendarIcon, Paperclip } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Plus, Trash2, User, PawPrint, Stethoscope, ClipboardList, CalendarIcon, Paperclip, ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -92,6 +92,10 @@ const defaultPet = (id: number): PetForm => ({
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const Index = () => {
+  const [step, setStep] = useState(1); // 1=Owner, 2=Basic, 3=Medical, 4=Visit, 5=Review
+  const ownerNameRef = useRef<HTMLInputElement>(null);
+  const petNameRef = useRef<HTMLInputElement>(null);
+
   const [owner, setOwner] = useState<OwnerForm>({
     owner_name: "",
     mobile_number: "",
@@ -101,6 +105,27 @@ const Index = () => {
   const [pets, setPets] = useState<PetForm[]>([defaultPet(1)]);
   const [nextId, setNextId] = useState(2);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentPetIndex, setCurrentPetIndex] = useState(0);
+
+  const currentPet = pets[currentPetIndex];
+
+  // Focus first input on step change
+  useEffect(() => {
+    if (step === 1 && ownerNameRef.current) ownerNameRef.current.focus();
+    if (step === 2 && petNameRef.current) petNameRef.current.focus();
+  }, [step]);
+
+  // Handle Enter key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleNext();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [step, owner, currentPet]);
 
   // ── Owner helpers ──────────────────────────────────────────────────────────
 
@@ -110,36 +135,52 @@ const Index = () => {
 
   // ── Pet helpers ────────────────────────────────────────────────────────────
 
-  const handlePetChange = (id: number, field: keyof PetForm, value: string | Date | undefined | File | null) => {
+  const handlePetChange = (field: keyof PetForm, value: string | Date | undefined | File | null) => {
     setPets((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, [field]: value } : p))
+      prev.map((p) => (p.id === currentPet.id ? { ...p, [field]: value } : p))
     );
   };
 
   const addPet = () => {
-    setPets((prev) => [...prev, defaultPet(nextId)]);
+    const newPet = defaultPet(nextId);
+    setPets((prev) => [...prev, newPet]);
     setNextId((n) => n + 1);
+    setCurrentPetIndex(pets.length);
   };
 
   const removePet = (id: number) => {
-    if (pets.length > 1) setPets((prev) => prev.filter((p) => p.id !== id));
+    if (pets.length > 1) {
+      setPets((prev) => prev.filter((p) => p.id !== id));
+      if (currentPetIndex >= pets.length - 1) {
+        setCurrentPetIndex(pets.length - 2);
+      }
+    }
+  };
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+
+  const handleNext = () => {
+    if (step === 1) {
+      if (!owner.owner_name.trim()) { toast.error("Owner name is required"); return; }
+      if (!owner.mobile_number.trim()) { toast.error("Mobile number is required"); return; }
+      setStep(2);
+    } else if (step === 2) {
+      if (!currentPet.pet_name.trim()) { toast.error("Pet name is required"); return; }
+      setStep(3);
+    } else if (step === 3) {
+      setStep(4);
+    } else if (step === 4) {
+      setStep(5);
+    }
+  };
+
+  const handleBack = () => {
+    if (step > 1) setStep(step - 1);
   };
 
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
-    if (!owner.owner_name.trim() || !owner.mobile_number.trim()) {
-      toast.error("Please fill in the owner name and mobile number.");
-      return;
-    }
-
-    for (const pet of pets) {
-      if (!pet.pet_name.trim()) {
-        toast.error("Please fill in all pet names.");
-        return;
-      }
-    }
-
     setIsSubmitting(true);
 
     try {
@@ -152,6 +193,7 @@ const Index = () => {
         
         formData.append("pet_name", pet.pet_name);
         if (pet.birth_date) formData.append("birth_date", format(pet.birth_date, "yyyy-MM-dd"));
+        formData.append("age", pet.age);
         if (pet.type) formData.append("type", pet.type.charAt(0).toUpperCase() + pet.type.slice(1));
         if (pet.gender) formData.append("gender", pet.gender.charAt(0).toUpperCase() + pet.gender.slice(1));
         if (pet.spayed_neutered) formData.append("spayed_neutered", pet.spayed_neutered === "yes" ? "Yes" : "No");
@@ -163,12 +205,8 @@ const Index = () => {
         if (pet.treatment) formData.append("treatment", pet.treatment);
         if (pet.follow_up_date) formData.append("follow_up_date", format(pet.follow_up_date, "yyyy-MM-dd"));
         
-        if (pet.diagnostics_file) {
-          formData.append("diagnostics", pet.diagnostics_file);
-        }
-        if (pet.today_visit_file) {
-          formData.append("today_visit", pet.today_visit_file);
-        }
+        if (pet.diagnostics_file) formData.append("diagnostics", pet.diagnostics_file);
+        if (pet.today_visit_file) formData.append("today_visit", pet.today_visit_file);
 
         return fetch(`${API_BASE}/api/clinic-records`, {
           method: "POST",
@@ -177,22 +215,18 @@ const Index = () => {
       });
 
       const responses = await Promise.all(requests);
-
       const failed = responses.filter((r) => !r.ok);
       if (failed.length > 0) {
         const errorData = await failed[0].json().catch(() => ({}));
         throw new Error(errorData.error ?? "One or more records failed to save.");
       }
 
-      toast.success(
-        pets.length > 1
-          ? `${pets.length} patient records saved successfully!`
-          : "Patient record saved successfully!"
-      );
-
+      toast.success(`${pets.length} patient record(s) saved successfully!`);
       setOwner({ owner_name: "", mobile_number: "", address: "" });
       setPets([defaultPet(1)]);
       setNextId(2);
+      setStep(1);
+      setCurrentPetIndex(0);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong.";
       toast.error(message);
@@ -200,6 +234,10 @@ const Index = () => {
       setIsSubmitting(false);
     }
   };
+
+  // ── Step indicator ─────────────────────────────────────────────────────────
+
+  const steps = ["Owner", "Basic Details", "Medical History", "Today's Visit", "Review"];
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -214,7 +252,7 @@ const Index = () => {
                 Patient Registration
               </h1>
               <p className="text-primary-foreground/70 text-sm mt-0.5">
-                Enter pet and owner details for the visit
+                Step {step} of 5: {steps[step - 1]}
               </p>
             </div>
           </div>
@@ -222,316 +260,341 @@ const Index = () => {
       </section>
 
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Owner Information */}
-        <Card className="mb-6 border-border shadow-sm">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg font-serif">
-              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <User size={16} className="text-primary" />
+        {/* Step Progress */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          {steps.map((s, i) => (
+            <div key={s} className="flex items-center gap-2">
+              <div className={cn(
+                "h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold",
+                i + 1 === step ? "bg-primary text-primary-foreground" :
+                i + 1 < step ? "bg-primary/20 text-primary" :
+                "bg-muted text-muted-foreground"
+              )}>
+                {i + 1 < step ? <Check size={14} /> : i + 1}
               </div>
-              Owner Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Owner Name</Label>
-                <Input
-                  placeholder="e.g. Ahmed Mohamed"
-                  value={owner.owner_name}
-                  onChange={(e) => handleOwnerChange("owner_name", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Mobile Number</Label>
-                <Input
-                  placeholder="e.g. +20 100 123 4567"
-                  type="tel"
-                  value={owner.mobile_number}
-                  onChange={(e) => handleOwnerChange("mobile_number", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Address</Label>
-                <Input
-                  placeholder="e.g. 15 El-Tahrir St, Cairo"
-                  value={owner.address}
-                  onChange={(e) => handleOwnerChange("address", e.target.value)}
-                />
-              </div>
+              <span className="hidden sm:block text-xs text-muted-foreground">{s}</span>
+              {i < steps.length - 1 && <div className="w-8 h-0.5 bg-muted" />}
             </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
 
-        {/* Pet Sections */}
-        {pets.map((pet, index) => (
-          <Card key={pet.id} className="mb-6 border-border shadow-sm">
+        {/* Step 1: Owner Information */}
+        {step === 1 && (
+          <Card className="mb-6 border-border shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-lg font-serif">
+                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <User size={16} className="text-primary" />
+                </div>
+                Owner Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Owner Name *</Label>
+                  <Input
+                    ref={ownerNameRef}
+                    placeholder="e.g. Ahmed Mohamed"
+                    value={owner.owner_name}
+                    onChange={(e) => handleOwnerChange("owner_name", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Mobile Number *</Label>
+                  <Input
+                    placeholder="e.g. +20 100 123 4567"
+                    type="tel"
+                    value={owner.mobile_number}
+                    onChange={(e) => handleOwnerChange("mobile_number", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Address</Label>
+                  <Input
+                    placeholder="e.g. 15 El-Tahrir St, Cairo"
+                    value={owner.address}
+                    onChange={(e) => handleOwnerChange("address", e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 2: Basic Details */}
+        {step === 2 && (
+          <Card className="mb-6 border-border shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-lg font-serif">
                   <div className="h-8 w-8 rounded-full bg-accent/10 flex items-center justify-center">
                     <PawPrint size={16} className="text-accent" />
                   </div>
-                  Pet {pets.length > 1 ? `#${index + 1}` : "Information"}
+                  Basic Details
                 </CardTitle>
                 {pets.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => removePet(pet.id)}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {pets.map((pet, idx) => (
+                      <Button
+                        key={pet.id}
+                        variant={idx === currentPetIndex ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPetIndex(idx)}
+                      >
+                        Pet {idx + 1}
+                      </Button>
+                    ))}
+                  </div>
                 )}
               </div>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Basic Details */}
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <PawPrint size={14} /> Basic Details
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="space-y-2">
-                    <Label>Pet Name</Label>
-                    <Input
-                      placeholder="e.g. Buddy"
-                      value={pet.pet_name}
-                      onChange={(e) => handlePetChange(pet.id, "pet_name", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Birthdate</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn("w-full justify-start text-left font-normal", !pet.birth_date && "text-muted-foreground")}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {pet.birth_date ? format(pet.birth_date, "PPP") : "Pick a date"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={pet.birth_date}
-                          onSelect={(date) => {
-                            handlePetChange(pet.id, "birth_date", date);
-                            handlePetChange(pet.id, "age", calculateAge(date));
-                          }}
-                          initialFocus
-                          className="p-3 pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Age</Label>
-                    <Input
-                      value={pet.age}
-                      readOnly
-                      className="bg-muted/50 cursor-default"
-                      placeholder="Auto-calculated"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Type</Label>
-                    <Select value={pet.type} onValueChange={(v) => handlePetChange(pet.id, "type", v)}>
-                      <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cat">🐱 Cat</SelectItem>
-                        <SelectItem value="dog">🐶 Dog</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Gender</Label>
-                    <Select value={pet.gender} onValueChange={(v) => handlePetChange(pet.id, "gender", v)}>
-                      <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Spayed / Neutered</Label>
-                    <Select value={pet.spayed_neutered} onValueChange={(v) => handlePetChange(pet.id, "spayed_neutered", v)}>
-                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="yes">Yes</SelectItem>
-                        <SelectItem value="no">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Weight (kg)</Label>
-                    <Input
-                      placeholder="e.g. 4.5"
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={pet.weight_kg}
-                      onChange={(e) => handlePetChange(pet.id, "weight_kg", e.target.value)}
-                    />
-                  </div>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>Pet Name *</Label>
+                  <Input
+                    ref={petNameRef}
+                    placeholder="e.g. Buddy"
+                    value={currentPet.pet_name}
+                    onChange={(e) => handlePetChange("pet_name", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Birthdate</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn("w-full justify-start text-left font-normal", !currentPet.birth_date && "text-muted-foreground")}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {currentPet.birth_date ? format(currentPet.birth_date, "PPP") : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={currentPet.birth_date}
+                        onSelect={(date) => {
+                          handlePetChange("birth_date", date);
+                          handlePetChange("age", calculateAge(date));
+                        }}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label>Age</Label>
+                  <Input value={currentPet.age} readOnly className="bg-muted/50 cursor-default" placeholder="Auto-calculated" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Type</Label>
+                  <Select value={currentPet.type} onValueChange={(v) => handlePetChange("type", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cat">🐱 Cat</SelectItem>
+                      <SelectItem value="dog">🐶 Dog</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Gender</Label>
+                  <Select value={currentPet.gender} onValueChange={(v) => handlePetChange("gender", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Spayed / Neutered</Label>
+                  <Select value={currentPet.spayed_neutered} onValueChange={(v) => handlePetChange("spayed_neutered", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Yes</SelectItem>
+                      <SelectItem value="no">No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Weight (kg)</Label>
+                  <Input
+                    placeholder="e.g. 4.5"
+                    type="number" min="0" step="0.1"
+                    value={currentPet.weight_kg}
+                    onChange={(e) => handlePetChange("weight_kg", e.target.value)}
+                  />
                 </div>
               </div>
-
-              <Separator />
-
-              {/* Medical History */}
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Stethoscope size={14} /> Medical History
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Disease History</Label>
-                    <Textarea
-                      placeholder="Previous diseases, chronic conditions..."
-                      rows={3}
-                      value={pet.disease_history}
-                      onChange={(e) => handlePetChange(pet.id, "disease_history", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Vaccination History</Label>
-                    <Textarea
-                      placeholder="Vaccines administered, dates..."
-                      rows={3}
-                      value={pet.vaccination_history}
-                      onChange={(e) => handlePetChange(pet.id, "vaccination_history", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label className="flex items-center gap-1">
-                      <Paperclip size={14} /> Diagnostics (PDF)
-                    </Label>
-                    <Input
-                      type="file"
-                      accept=".pdf"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] || null;
-                        handlePetChange(pet.id, "diagnostics_file", file as any);
-                        handlePetChange(pet.id, "diagnostics_filename", file?.name || "");
-                      }}
-                    />
-                    {pet.diagnostics_filename && (
-                      <p className="text-xs text-muted-foreground">
-                        Selected: {pet.diagnostics_filename}
-                      </p>
-                    )}
-                  </div>
-                </div>
+              {/* Add Pet Button */}
+              <div className="mt-6">
+                <Button variant="outline" onClick={addPet} className="w-full border-dashed border-2 border-primary/30 text-primary">
+                  <Plus size={16} className="mr-2" /> Add Another Pet
+                </Button>
               </div>
+            </CardContent>
+          </Card>
+        )}
 
-              <Separator />
-
-              {/* Visit Details */}
-              <div>
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <ClipboardList size={14} /> Today's Visit
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>What was done today</Label>
-                    <Textarea
-                      placeholder="Examination, procedures performed..."
-                      rows={3}
-                      value={pet.what_was_done_today}
-                      onChange={(e) => handlePetChange(pet.id, "what_was_done_today", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Diagnosis</Label>
-                    <Textarea
-                      placeholder="Diagnosis details..."
-                      rows={3}
-                      value={pet.diagnosis}
-                      onChange={(e) => handlePetChange(pet.id, "diagnosis", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Treatment</Label>
-                    <Textarea
-                      placeholder="Prescribed treatment, medications..."
-                      rows={3}
-                      value={pet.treatment}
-                      onChange={(e) => handlePetChange(pet.id, "treatment", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Follow-up Date</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn("w-full justify-start text-left font-normal", !pet.follow_up_date && "text-muted-foreground")}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {pet.follow_up_date ? format(pet.follow_up_date, "PPP") : "Pick follow-up date"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={pet.follow_up_date}
-                          onSelect={(date) => handlePetChange(pet.id, "follow_up_date", date)}
-                          initialFocus
-                          className="p-3 pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label className="flex items-center gap-1">
-                      <Paperclip size={14} /> Today's Visit Attachment (PDF)
-                    </Label>
-                    <Input
-                      type="file"
-                      accept=".pdf"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] || null;
-                        handlePetChange(pet.id, "today_visit_file", file as any);
-                        handlePetChange(pet.id, "today_visit_filename", file?.name || "");
-                      }}
-                    />
-                    {pet.today_visit_filename && (
-                      <p className="text-xs text-muted-foreground">
-                        Selected: {pet.today_visit_filename}
-                      </p>
-                    )}
-                  </div>
+        {/* Step 3: Medical History */}
+        {step === 3 && (
+          <Card className="mb-6 border-border shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-lg font-serif">
+                <Stethoscope size={16} className="text-primary" /> Medical History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Disease History</Label>
+                  <Textarea placeholder="Previous diseases, chronic conditions..." rows={3}
+                    value={currentPet.disease_history}
+                    onChange={(e) => handlePetChange("disease_history", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Vaccination History</Label>
+                  <Textarea placeholder="Vaccines administered, dates..." rows={3}
+                    value={currentPet.vaccination_history}
+                    onChange={(e) => handlePetChange("vaccination_history", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label className="flex items-center gap-1"><Paperclip size={14} /> Diagnostics (PDF)</Label>
+                  <Input type="file" accept=".pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      handlePetChange("diagnostics_file", file as any);
+                      handlePetChange("diagnostics_filename", file?.name || "");
+                    }}
+                  />
+                  {currentPet.diagnostics_filename && (
+                    <p className="text-xs text-muted-foreground">Selected: {currentPet.diagnostics_filename}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
-        ))}
+        )}
 
-        {/* Add New Pet */}
-        <div className="mb-6">
-          <Button
-            variant="outline"
-            onClick={addPet}
-            className="w-full border-dashed border-2 border-primary/30 text-primary hover:bg-primary/5 hover:border-primary/50 py-6 text-base"
-          >
-            <Plus size={20} className="mr-2" /> Add Another Pet for Same Owner
-          </Button>
-        </div>
+        {/* Step 4: Today's Visit */}
+        {step === 4 && (
+          <Card className="mb-6 border-border shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-lg font-serif">
+                <ClipboardList size={16} className="text-primary" /> Today's Visit
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>What was done today</Label>
+                  <Textarea placeholder="Examination, procedures performed..." rows={3}
+                    value={currentPet.what_was_done_today}
+                    onChange={(e) => handlePetChange("what_was_done_today", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Diagnosis</Label>
+                  <Textarea placeholder="Diagnosis details..." rows={3}
+                    value={currentPet.diagnosis}
+                    onChange={(e) => handlePetChange("diagnosis", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Treatment</Label>
+                  <Textarea placeholder="Prescribed treatment, medications..." rows={3}
+                    value={currentPet.treatment}
+                    onChange={(e) => handlePetChange("treatment", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Follow-up Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline"
+                        className={cn("w-full justify-start text-left font-normal", !currentPet.follow_up_date && "text-muted-foreground")}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {currentPet.follow_up_date ? format(currentPet.follow_up_date, "PPP") : "Pick follow-up date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={currentPet.follow_up_date}
+                        onSelect={(date) => handlePetChange("follow_up_date", date)}
+                        initialFocus className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label className="flex items-center gap-1"><Paperclip size={14} /> Today's Visit Attachment (PDF)</Label>
+                  <Input type="file" accept=".pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      handlePetChange("today_visit_file", file as any);
+                      handlePetChange("today_visit_filename", file?.name || "");
+                    }}
+                  />
+                  {currentPet.today_visit_filename && (
+                    <p className="text-xs text-muted-foreground">Selected: {currentPet.today_visit_filename}</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Submit */}
-        <div className="flex justify-end mb-12">
-          <Button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            size="lg"
-            className="rounded-full px-10 bg-accent text-accent-foreground hover:bg-accent/90 shadow-md"
-          >
-            {isSubmitting ? "Saving..." : "Save Patient Record"}
+        {/* Step 5: Review */}
+        {step === 5 && (
+          <Card className="mb-6 border-border shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-lg font-serif">
+                <Check size={16} className="text-primary" /> Review & Submit
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold">Owner</h3>
+                  <p className="text-sm text-muted-foreground">{owner.owner_name} | {owner.mobile_number} | {owner.address || "—"}</p>
+                </div>
+                <Separator />
+                {pets.map((pet, idx) => (
+                  <div key={pet.id}>
+                    <h3 className="font-semibold">Pet {pets.length > 1 ? `#${idx + 1}` : ""}: {pet.pet_name}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {pet.type} | {pet.gender} | {pet.age || "—"} | {pet.weight_kg ? `${pet.weight_kg}kg` : "—"} | Spayed: {pet.spayed_neutered || "—"}
+                    </p>
+                    {pet.disease_history && <p className="text-sm text-muted-foreground"><strong>Diseases:</strong> {pet.disease_history}</p>}
+                    {pet.diagnosis && <p className="text-sm text-muted-foreground"><strong>Diagnosis:</strong> {pet.diagnosis}</p>}
+                    {pet.treatment && <p className="text-sm text-muted-foreground"><strong>Treatment:</strong> {pet.treatment}</p>}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Navigation Buttons */}
+        <div className="flex justify-between mb-12">
+          <Button variant="outline" onClick={handleBack} disabled={step === 1}>
+            <ArrowLeft size={16} className="mr-2" /> Back
           </Button>
+          {step < 5 ? (
+            <Button onClick={handleNext}>
+              Next <ArrowRight size={16} className="ml-2" />
+            </Button>
+          ) : (
+            <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-accent text-accent-foreground">
+              {isSubmitting ? "Saving..." : "Submit"} <Check size={16} className="ml-2" />
+            </Button>
+          )}
         </div>
       </div>
     </div>

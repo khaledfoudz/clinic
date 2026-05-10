@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import logo from "@/assets/logo.png";
 
+const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+
 const Login = () => {
   const navigate = useNavigate();
 
@@ -23,13 +25,26 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // هنا انت هتربط بالـ backend بعدين
-      await new Promise((res) => setTimeout(res, 1000));
+      const response = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed");
+      }
+
+      // Save token and user info
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
 
       toast.success("Login successful");
-      navigate("/dashboard");
+      navigate("/");
     } catch (err) {
-      toast.error("Login failed");
+      toast.error(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
     }
