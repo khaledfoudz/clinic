@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 110" width="520" height="110">
+  <!-- No background — transparent -->
+
+  <!-- Paw print icon -->
+  <g transform="translate(18, 18)">
+    <!-- Main paw pad -->
+    <ellipse cx="37" cy="58" rx="22" ry="18" fill="#C0392B"/>
+    <!-- Toe pads -->
+    <ellipse cx="16" cy="38" rx="9" ry="11" fill="#C0392B"/>
+    <ellipse cx="30" cy="30" rx="9" ry="11" fill="#C0392B"/>
+    <ellipse cx="45" cy="30" rx="9" ry="11" fill="#C0392B"/>
+    <ellipse cx="59" cy="38" rx="9" ry="11" fill="#C0392B"/>
+  </g>
+
+  <!-- PetMedic wordmark -->
+  <!-- "Pet" in red -->
+  <text
+    x="98"
+    y="72"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="58"
+    font-weight="700"
+    font-style="italic"
+    fill="#C0392B"
+    letter-spacing="-1"
+  >Pet</text>
+
+  <!-- "Medic" in dark navy -->
+  <text
+    x="218"
+    y="72"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="58"
+    font-weight="700"
+    font-style="italic"
+    fill="#1A2744"
+    letter-spacing="-1"
+  >Medic</text>
+
+  <!-- Divider line -->
+  <line x1="98" y1="80" x2="500" y2="80" stroke="#C0392B" stroke-width="1.5" opacity="0.4"/>
+
+  <!-- "Dr. Mohamed Fouda" subtitle -->
+  <text
+    x="100"
+    y="100"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="16"
+    font-style="italic"
+    fill="#1A2744"
+    letter-spacing="0.5"
+  >Dr. Mohamed Fouda</text>
+</svg>

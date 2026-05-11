@@ -116,6 +116,22 @@ const Index = () => {
   const [step, setStep] = useState(1); // 1=Owner, 2=Basic, 3=Medical, 4=Visit, 5=Review
   const ownerNameRef = useRef<HTMLInputElement>(null);
   const petNameRef = useRef<HTMLInputElement>(null);
+  const mobileRef = useRef<HTMLInputElement>(null);
+  const addressRef = useRef<HTMLInputElement>(null);
+  const birthDateRef = useRef<HTMLButtonElement>(null);
+  const typeRef = useRef<HTMLButtonElement>(null);
+  const genderRef = useRef<HTMLButtonElement>(null);
+  const spayedRef = useRef<HTMLButtonElement>(null);
+  const weightRef = useRef<HTMLInputElement>(null);
+  const addPetRef = useRef<HTMLButtonElement>(null);
+  const diseaseRef = useRef<HTMLTextAreaElement>(null);
+  const vaccinationRef = useRef<HTMLTextAreaElement>(null);
+  const diagnosticsRef = useRef<HTMLInputElement>(null);
+  const whatDoneRef = useRef<HTMLTextAreaElement>(null);
+  const diagnosisRef = useRef<HTMLTextAreaElement>(null);
+  const treatmentRef = useRef<HTMLTextAreaElement>(null);
+  const followUpRef = useRef<HTMLButtonElement>(null);
+  const todayVisitRef = useRef<HTMLInputElement>(null);
 
   const [owner, setOwner] = useState<OwnerForm>({
     owner_name: "",
@@ -134,19 +150,65 @@ const Index = () => {
   useEffect(() => {
     if (step === 1 && ownerNameRef.current) ownerNameRef.current.focus();
     if (step === 2 && petNameRef.current) petNameRef.current.focus();
+    if (step === 3 && diseaseRef.current) diseaseRef.current.focus();
+    if (step === 4 && whatDoneRef.current) whatDoneRef.current.focus();
   }, [step]);
 
-  // Handle Enter key
+  // ── Enhanced Enter key handler ──────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter" && !e.shiftKey && !isSubmitting) {
+        const target = e.target as HTMLElement;
+        
+        // Allow Enter in textareas for new lines
+        if (target.tagName === 'TEXTAREA') {
+          return;
+        }
+        
         e.preventDefault();
-        handleNext();
+        
+        // If on last step, submit
+        if (step === 5) {
+          handleSubmit();
+          return;
+        }
+        
+        // Define focus order for each step
+        const focusOrders: { [key: number]: (HTMLElement | null)[] } = {
+          1: [ownerNameRef.current, mobileRef.current, addressRef.current],
+          2: [petNameRef.current, birthDateRef.current, typeRef.current, genderRef.current, spayedRef.current, weightRef.current, addPetRef.current],
+          3: [diseaseRef.current, vaccinationRef.current, diagnosticsRef.current],
+          4: [whatDoneRef.current, diagnosisRef.current, treatmentRef.current, followUpRef.current, todayVisitRef.current],
+        };
+        
+        const currentStepFields = focusOrders[step];
+        if (!currentStepFields) {
+          handleNext();
+          return;
+        }
+        
+        const currentIndex = currentStepFields.findIndex(field => field === target);
+        
+        // If current field is found and it's not the last field, focus next field
+        if (currentIndex !== -1 && currentIndex < currentStepFields.length - 1) {
+          const nextField = currentStepFields[currentIndex + 1];
+          if (nextField) {
+            nextField.focus();
+            // For select triggers, simulate click to open dropdown
+            if (nextField.getAttribute('role') === 'combobox' || nextField.classList.contains('justify-between')) {
+              (nextField as HTMLButtonElement).click();
+            }
+          }
+        } else {
+          // At the last field, move to next step
+          handleNext();
+        }
       }
     };
+    
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [step, owner, currentPet]);
+  }, [step, owner, currentPet, isSubmitting]);
 
   // ── Owner helpers ──────────────────────────────────────────────────────────
 
@@ -167,6 +229,10 @@ const Index = () => {
     setPets((prev) => [...prev, newPet]);
     setNextId((n) => n + 1);
     setCurrentPetIndex(pets.length);
+    // Focus the new pet's name field after a short delay
+    setTimeout(() => {
+      if (petNameRef.current) petNameRef.current.focus();
+    }, 100);
   };
 
   const removePet = (id: number) => {
@@ -182,14 +248,17 @@ const Index = () => {
 
   const handleNext = () => {
     if (step === 1) {
-      if (!owner.owner_name.trim())    { toast.error("Owner name is required"); return; }
-      if (!owner.mobile_number.trim()) { toast.error("Mobile number is required"); return; }
+      if (!owner.owner_name.trim())    { toast.error("Owner name is required"); ownerNameRef.current?.focus(); return; }
+      if (!owner.mobile_number.trim()) { toast.error("Mobile number is required"); mobileRef.current?.focus(); return; }
       setStep(2);
+      setTimeout(() => petNameRef.current?.focus(), 100);
     } else if (step === 2) {
-      if (!currentPet.pet_name.trim()) { toast.error("Pet name is required"); return; }
+      if (!currentPet.pet_name.trim()) { toast.error("Pet name is required"); petNameRef.current?.focus(); return; }
       setStep(3);
+      setTimeout(() => diseaseRef.current?.focus(), 100);
     } else if (step === 3) {
       setStep(4);
+      setTimeout(() => whatDoneRef.current?.focus(), 100);
     } else if (step === 4) {
       setStep(5);
     }
@@ -273,7 +342,7 @@ const Index = () => {
                 Patient Registration
               </h1>
               <p className="text-primary-foreground/70 text-sm mt-0.5">
-                Step {step} of 5: {steps[step - 1]}
+                Step {step} of 5: {steps[step - 1]} (Press Enter to navigate)
               </p>
             </div>
           </div>
@@ -324,6 +393,7 @@ const Index = () => {
                 <div className="space-y-2">
                   <Label>Mobile Number *</Label>
                   <Input
+                    ref={mobileRef}
                     placeholder="e.g. +20 100 123 4567"
                     type="tel"
                     value={owner.mobile_number}
@@ -333,6 +403,7 @@ const Index = () => {
                 <div className="space-y-2 md:col-span-2">
                   <Label>Address</Label>
                   <Input
+                    ref={addressRef}
                     placeholder="e.g. 15 El-Tahrir St, Cairo"
                     value={owner.address}
                     onChange={(e) => handleOwnerChange("address", e.target.value)}
@@ -386,6 +457,7 @@ const Index = () => {
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
+                        ref={birthDateRef}
                         variant="outline"
                         className={cn("w-full justify-start text-left font-normal", !currentPet.birth_date && "text-muted-foreground")}
                       >
@@ -414,7 +486,9 @@ const Index = () => {
                 <div className="space-y-2">
                   <Label>Type</Label>
                   <Select value={currentPet.type} onValueChange={(v) => handlePetChange("type", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectTrigger ref={typeRef}>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="cat">🐱 Cat</SelectItem>
                       <SelectItem value="dog">🐶 Dog</SelectItem>
@@ -424,7 +498,9 @@ const Index = () => {
                 <div className="space-y-2">
                   <Label>Gender</Label>
                   <Select value={currentPet.gender} onValueChange={(v) => handlePetChange("gender", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
+                    <SelectTrigger ref={genderRef}>
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="male">Male</SelectItem>
                       <SelectItem value="female">Female</SelectItem>
@@ -434,7 +510,9 @@ const Index = () => {
                 <div className="space-y-2">
                   <Label>Spayed / Neutered</Label>
                   <Select value={currentPet.spayed_neutered} onValueChange={(v) => handlePetChange("spayed_neutered", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectTrigger ref={spayedRef}>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="yes">Yes</SelectItem>
                       <SelectItem value="no">No</SelectItem>
@@ -444,6 +522,7 @@ const Index = () => {
                 <div className="space-y-2">
                   <Label>Weight (kg)</Label>
                   <Input
+                    ref={weightRef}
                     placeholder="e.g. 4.5"
                     type="number" min="0" step="0.1"
                     value={currentPet.weight_kg}
@@ -454,6 +533,7 @@ const Index = () => {
               {/* Add Pet Button */}
               <div className="mt-6">
                 <Button
+                  ref={addPetRef}
                   variant="outline"
                   onClick={addPet}
                   className="w-full border-dashed border-2 border-primary/30 text-primary hover:bg-primary/5 hover:border-primary/50 py-6 text-base"
@@ -496,21 +576,42 @@ const Index = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Disease History</Label>
-                  <Textarea placeholder="Previous diseases, chronic conditions..." rows={3}
+                  <Textarea 
+                    ref={diseaseRef}
+                    placeholder="Previous diseases, chronic conditions..." 
+                    rows={3}
                     value={currentPet.disease_history}
                     onChange={(e) => handlePetChange("disease_history", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        vaccinationRef.current?.focus();
+                      }
+                    }}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Vaccination History</Label>
-                  <Textarea placeholder="Vaccines administered, dates..." rows={3}
+                  <Textarea 
+                    ref={vaccinationRef}
+                    placeholder="Vaccines administered, dates..." 
+                    rows={3}
                     value={currentPet.vaccination_history}
                     onChange={(e) => handlePetChange("vaccination_history", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        diagnosticsRef.current?.focus();
+                      }
+                    }}
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label className="flex items-center gap-1"><Paperclip size={14} /> Diagnostics (PDF)</Label>
-                  <Input type="file" accept=".pdf"
+                  <Input 
+                    ref={diagnosticsRef}
+                    type="file" 
+                    accept=".pdf"
                     onChange={(e) => {
                       const file = e.target.files?.[0] || null;
                       handlePetChange("diagnostics_file", file as any);
@@ -557,30 +658,59 @@ const Index = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>What was done today</Label>
-                  <Textarea placeholder="Examination, procedures performed..." rows={3}
+                  <Textarea 
+                    ref={whatDoneRef}
+                    placeholder="Examination, procedures performed..." 
+                    rows={3}
                     value={currentPet.what_was_done_today}
                     onChange={(e) => handlePetChange("what_was_done_today", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        diagnosisRef.current?.focus();
+                      }
+                    }}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Diagnosis</Label>
-                  <Textarea placeholder="Diagnosis details..." rows={3}
+                  <Textarea 
+                    ref={diagnosisRef}
+                    placeholder="Diagnosis details..." 
+                    rows={3}
                     value={currentPet.diagnosis}
                     onChange={(e) => handlePetChange("diagnosis", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        treatmentRef.current?.focus();
+                      }
+                    }}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Treatment</Label>
-                  <Textarea placeholder="Prescribed treatment, medications..." rows={3}
+                  <Textarea 
+                    ref={treatmentRef}
+                    placeholder="Prescribed treatment, medications..." 
+                    rows={3}
                     value={currentPet.treatment}
                     onChange={(e) => handlePetChange("treatment", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        followUpRef.current?.focus();
+                      }
+                    }}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Follow-up Date</Label>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline"
+                      <Button
+                        ref={followUpRef}
+                        variant="outline"
                         className={cn("w-full justify-start text-left font-normal", !currentPet.follow_up_date && "text-muted-foreground")}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
@@ -588,16 +718,22 @@ const Index = () => {
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={currentPet.follow_up_date}
+                      <Calendar 
+                        mode="single" 
+                        selected={currentPet.follow_up_date}
                         onSelect={(date) => handlePetChange("follow_up_date", date)}
-                        initialFocus className="p-3 pointer-events-auto"
+                        initialFocus 
+                        className="p-3 pointer-events-auto"
                       />
                     </PopoverContent>
                   </Popover>
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label className="flex items-center gap-1"><Paperclip size={14} /> Today's Visit Attachment (PDF)</Label>
-                  <Input type="file" accept=".pdf"
+                  <Input 
+                    ref={todayVisitRef}
+                    type="file" 
+                    accept=".pdf"
                     onChange={(e) => {
                       const file = e.target.files?.[0] || null;
                       handlePetChange("today_visit_file", file as any);

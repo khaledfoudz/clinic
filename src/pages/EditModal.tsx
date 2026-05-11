@@ -3,7 +3,7 @@
 //   ownerId  — always required (which owner we're working on)
 //   petId    — number → edit that pet | null → add a brand-new pet to this owner
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   X, User, PawPrint, Stethoscope, ClipboardList,
   CalendarIcon, Paperclip, ArrowRight, ArrowLeft, Check,
@@ -100,6 +100,25 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
   });
   const [pet, setPet] = useState<PetFields>(emptyPet());
 
+  // Refs for focus management
+  const ownerNameRef = useRef<HTMLInputElement>(null);
+  const mobileRef = useRef<HTMLInputElement>(null);
+  const addressRef = useRef<HTMLInputElement>(null);
+  const petNameRef = useRef<HTMLInputElement>(null);
+  const birthDateRef = useRef<HTMLButtonElement>(null);
+  const typeRef = useRef<HTMLButtonElement>(null);
+  const genderRef = useRef<HTMLButtonElement>(null);
+  const spayedRef = useRef<HTMLButtonElement>(null);
+  const weightRef = useRef<HTMLInputElement>(null);
+  const diseaseRef = useRef<HTMLTextAreaElement>(null);
+  const vaccinationRef = useRef<HTMLTextAreaElement>(null);
+  const diagnosticsRef = useRef<HTMLInputElement>(null);
+  const whatDoneRef = useRef<HTMLTextAreaElement>(null);
+  const diagnosisRef = useRef<HTMLTextAreaElement>(null);
+  const treatmentRef = useRef<HTMLTextAreaElement>(null);
+  const followUpRef = useRef<HTMLButtonElement>(null);
+  const todayVisitRef = useRef<HTMLInputElement>(null);
+
   // ── Fetch on open ──────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -165,18 +184,77 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
     }
   };
 
-  // ── Enter key ──────────────────────────────────────────────────────────────
+  // Focus first input on step change
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    if (step === 1 && !isAddPetMode) {
+      setTimeout(() => ownerNameRef.current?.focus(), 100);
+    } else if (step === 2) {
+      setTimeout(() => petNameRef.current?.focus(), 100);
+    } else if (step === 3) {
+      setTimeout(() => diseaseRef.current?.focus(), 100);
+    } else if (step === 4) {
+      setTimeout(() => whatDoneRef.current?.focus(), 100);
+    }
+  }, [step, isOpen, isAddPetMode]);
+
+  // ── Enhanced Enter key handler ──────────────────────────────────────────────
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey && isOpen) {
+      if (e.key === "Enter" && !e.shiftKey && isOpen && !isSubmitting && !isLoading) {
+        const target = e.target as HTMLElement;
+        
+        // Allow Enter in textareas for new lines
+        if (target.tagName === 'TEXTAREA') {
+          return;
+        }
+        
         e.preventDefault();
-        handleNext();
+        
+        // If on last step, submit
+        if (step === 5) {
+          handleSubmit();
+          return;
+        }
+        
+        // Define focus order for each step based on mode
+        let focusOrder: (HTMLElement | null)[] = [];
+        
+        if (step === 1 && !isAddPetMode) {
+          focusOrder = [ownerNameRef.current, mobileRef.current, addressRef.current];
+        } else if (step === 2) {
+          focusOrder = [petNameRef.current, birthDateRef.current, typeRef.current, genderRef.current, spayedRef.current, weightRef.current];
+        } else if (step === 3) {
+          focusOrder = [diseaseRef.current, vaccinationRef.current, diagnosticsRef.current];
+        } else if (step === 4) {
+          focusOrder = [whatDoneRef.current, diagnosisRef.current, treatmentRef.current, followUpRef.current, todayVisitRef.current];
+        }
+        
+        const currentIndex = focusOrder.findIndex(field => field === target);
+        
+        // If current field is found and it's not the last field, focus next field
+        if (currentIndex !== -1 && currentIndex < focusOrder.length - 1) {
+          const nextField = focusOrder[currentIndex + 1];
+          if (nextField) {
+            nextField.focus();
+            // For select triggers, simulate click to open dropdown
+            if (nextField.getAttribute('role') === 'combobox' || 
+                (nextField.classList && nextField.classList.contains('justify-between'))) {
+              (nextField as HTMLButtonElement).click();
+            }
+          }
+        } else {
+          // At the last field or field not found, move to next step
+          handleNext();
+        }
       }
     };
+    
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [step, ownerFields, pet, isOpen]);
+  }, [step, ownerFields, pet, isOpen, isSubmitting, isLoading, isAddPetMode]);
 
   // ── Field helpers ──────────────────────────────────────────────────────────
 
@@ -193,15 +271,30 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
   const minStep = isAddPetMode ? 2 : 1;
 
   const handleNext = () => {
-    if (step === 1) {
-      if (!ownerFields.owner_name.trim())    { toast.error("Owner name is required"); return; }
-      if (!ownerFields.mobile_number.trim()) { toast.error("Mobile number is required"); return; }
+    if (step === 1 && !isAddPetMode) {
+      if (!ownerFields.owner_name.trim()) { 
+        toast.error("Owner name is required"); 
+        ownerNameRef.current?.focus();
+        return; 
+      }
+      if (!ownerFields.mobile_number.trim()) { 
+        toast.error("Mobile number is required"); 
+        mobileRef.current?.focus();
+        return; 
+      }
       setStep(2);
     } else if (step === 2) {
-      if (!pet.pet_name.trim()) { toast.error("Pet name is required"); return; }
+      if (!pet.pet_name.trim()) { 
+        toast.error("Pet name is required"); 
+        petNameRef.current?.focus();
+        return; 
+      }
       setStep(3);
-    } else if (step === 3) { setStep(4);
-    } else if (step === 4) { setStep(5); }
+    } else if (step === 3) { 
+      setStep(4);
+    } else if (step === 4) { 
+      setStep(5);
+    }
   };
 
   const handleBack = () => {
@@ -303,6 +396,11 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
               })}
             </div>
 
+            {/* Hint text for Enter key navigation */}
+            <div className="mb-4 text-xs text-center text-muted-foreground">
+              💡 Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Enter</kbd> to move to next field / step
+            </div>
+
             {/* Context banner in add-pet mode */}
             {isAddPetMode && (
               <div className="mb-4 rounded-md bg-muted/30 border border-border px-4 py-2 text-sm text-muted-foreground">
@@ -325,18 +423,27 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Owner Name *</Label>
-                      <Input value={ownerFields.owner_name}
-                        onChange={(e) => handleOwnerChange("owner_name", e.target.value)} />
+                      <Input 
+                        ref={ownerNameRef}
+                        value={ownerFields.owner_name}
+                        onChange={(e) => handleOwnerChange("owner_name", e.target.value)}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Mobile Number *</Label>
-                      <Input value={ownerFields.mobile_number}
-                        onChange={(e) => handleOwnerChange("mobile_number", e.target.value)} />
+                      <Input 
+                        ref={mobileRef}
+                        value={ownerFields.mobile_number}
+                        onChange={(e) => handleOwnerChange("mobile_number", e.target.value)}
+                      />
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label>Address</Label>
-                      <Input value={ownerFields.address}
-                        onChange={(e) => handleOwnerChange("address", e.target.value)} />
+                      <Input 
+                        ref={addressRef}
+                        value={ownerFields.address}
+                        onChange={(e) => handleOwnerChange("address", e.target.value)}
+                      />
                     </div>
                   </div>
                 </CardContent>
@@ -358,14 +465,21 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="space-y-2">
                       <Label>Pet Name *</Label>
-                      <Input value={pet.pet_name}
-                        onChange={(e) => handlePetChange("pet_name", e.target.value)} />
+                      <Input 
+                        ref={petNameRef}
+                        value={pet.pet_name}
+                        onChange={(e) => handlePetChange("pet_name", e.target.value)}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Birthdate</Label>
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !pet.birth_date && "text-muted-foreground")}>
+                          <Button 
+                            ref={birthDateRef}
+                            variant="outline" 
+                            className={cn("w-full justify-start text-left font-normal", !pet.birth_date && "text-muted-foreground")}
+                          >
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {pet.birth_date ? format(pet.birth_date, "PPP") : "Pick a date"}
                           </Button>
@@ -387,7 +501,9 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                     <div className="space-y-2">
                       <Label>Type</Label>
                       <Select value={pet.type} onValueChange={(v) => handlePetChange("type", v)}>
-                        <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                        <SelectTrigger ref={typeRef}>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cat">🐱 Cat</SelectItem>
                           <SelectItem value="dog">🐶 Dog</SelectItem>
@@ -397,7 +513,9 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                     <div className="space-y-2">
                       <Label>Gender</Label>
                       <Select value={pet.gender} onValueChange={(v) => handlePetChange("gender", v)}>
-                        <SelectTrigger><SelectValue placeholder="Select gender" /></SelectTrigger>
+                        <SelectTrigger ref={genderRef}>
+                          <SelectValue placeholder="Select gender" />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="male">Male</SelectItem>
                           <SelectItem value="female">Female</SelectItem>
@@ -407,7 +525,9 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                     <div className="space-y-2">
                       <Label>Spayed / Neutered</Label>
                       <Select value={pet.spayed_neutered} onValueChange={(v) => handlePetChange("spayed_neutered", v)}>
-                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                        <SelectTrigger ref={spayedRef}>
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="yes">Yes</SelectItem>
                           <SelectItem value="no">No</SelectItem>
@@ -416,8 +536,13 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                     </div>
                     <div className="space-y-2">
                       <Label>Weight (kg)</Label>
-                      <Input type="number" step="0.1" value={pet.weight_kg}
-                        onChange={(e) => handlePetChange("weight_kg", e.target.value)} />
+                      <Input 
+                        ref={weightRef}
+                        type="number" 
+                        step="0.1" 
+                        value={pet.weight_kg}
+                        onChange={(e) => handlePetChange("weight_kg", e.target.value)}
+                      />
                     </div>
                   </div>
                 </CardContent>
@@ -439,17 +564,40 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Disease History</Label>
-                      <Textarea rows={3} value={pet.disease_history}
-                        onChange={(e) => handlePetChange("disease_history", e.target.value)} />
+                      <Textarea 
+                        ref={diseaseRef}
+                        rows={3} 
+                        value={pet.disease_history}
+                        onChange={(e) => handlePetChange("disease_history", e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            vaccinationRef.current?.focus();
+                          }
+                        }}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Vaccination History</Label>
-                      <Textarea rows={3} value={pet.vaccination_history}
-                        onChange={(e) => handlePetChange("vaccination_history", e.target.value)} />
+                      <Textarea 
+                        ref={vaccinationRef}
+                        rows={3} 
+                        value={pet.vaccination_history}
+                        onChange={(e) => handlePetChange("vaccination_history", e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            diagnosticsRef.current?.focus();
+                          }
+                        }}
+                      />
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label className="flex items-center gap-1"><Paperclip size={14} /> Diagnostics (PDF)</Label>
-                      <Input type="file" accept=".pdf"
+                      <Input 
+                        ref={diagnosticsRef}
+                        type="file" 
+                        accept=".pdf"
                         onChange={(e) => {
                           const file = e.target.files?.[0] || null;
                           handlePetChange("diagnostics_file", file as any);
@@ -483,24 +631,58 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>What was done today</Label>
-                      <Textarea rows={3} value={pet.what_was_done_today}
-                        onChange={(e) => handlePetChange("what_was_done_today", e.target.value)} />
+                      <Textarea 
+                        ref={whatDoneRef}
+                        rows={3} 
+                        value={pet.what_was_done_today}
+                        onChange={(e) => handlePetChange("what_was_done_today", e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            diagnosisRef.current?.focus();
+                          }
+                        }}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Diagnosis</Label>
-                      <Textarea rows={3} value={pet.diagnosis}
-                        onChange={(e) => handlePetChange("diagnosis", e.target.value)} />
+                      <Textarea 
+                        ref={diagnosisRef}
+                        rows={3} 
+                        value={pet.diagnosis}
+                        onChange={(e) => handlePetChange("diagnosis", e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            treatmentRef.current?.focus();
+                          }
+                        }}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Treatment</Label>
-                      <Textarea rows={3} value={pet.treatment}
-                        onChange={(e) => handlePetChange("treatment", e.target.value)} />
+                      <Textarea 
+                        ref={treatmentRef}
+                        rows={3} 
+                        value={pet.treatment}
+                        onChange={(e) => handlePetChange("treatment", e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            followUpRef.current?.focus();
+                          }
+                        }}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Follow-up Date</Label>
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !pet.follow_up_date && "text-muted-foreground")}>
+                          <Button 
+                            ref={followUpRef}
+                            variant="outline" 
+                            className={cn("w-full justify-start text-left font-normal", !pet.follow_up_date && "text-muted-foreground")}
+                          >
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {pet.follow_up_date ? format(pet.follow_up_date, "PPP") : "Pick follow-up date"}
                           </Button>
@@ -514,7 +696,10 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label className="flex items-center gap-1"><Paperclip size={14} /> Today's Visit Attachment (PDF)</Label>
-                      <Input type="file" accept=".pdf"
+                      <Input 
+                        ref={todayVisitRef}
+                        type="file" 
+                        accept=".pdf"
                         onChange={(e) => {
                           const file = e.target.files?.[0] || null;
                           handlePetChange("today_visit_file", file as any);

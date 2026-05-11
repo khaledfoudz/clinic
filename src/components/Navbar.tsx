@@ -12,10 +12,36 @@ const Navbar = () => {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
+  // Replace this with your real auth state (e.g. from context or zustand)
+  const isLoggedIn = false;
+
+  const handleAuthAction = () => {
+    if (isLoggedIn) {
+      // your logout logic here
+    }
+    setOpen(false);
+  };
+
+  const authButton = (mobile = false) => (
+    <Link
+      to={isLoggedIn ? "/" : "/login"}
+      onClick={handleAuthAction}
+      className={`${mobile ? "block text-center" : "ml-3"} px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+        isLoggedIn
+          ? "bg-[#C0392B] text-white hover:bg-[#a93226]"
+          : location.pathname === "/login"
+          ? "bg-[#1A2744] text-white"
+          : "bg-[#1A2744] text-white hover:bg-[#243660]"
+      }`}
+    >
+      {isLoggedIn ? "Log Out" : "Login"}
+    </Link>
+  );
+
   return (
     <nav className="sticky top-0 z-50 bg-card/95 backdrop-blur-md border-b border-border shadow-sm">
       <div className="container mx-auto flex items-center justify-between py-3 px-4">
-        
+
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
           <img src={logo} alt="Pet Medic" className="h-14 w-auto" />
@@ -36,18 +62,7 @@ const Navbar = () => {
               {link.label}
             </Link>
           ))}
-
-          {/* Login Button */}
-          <Link
-            to="/login"
-            className={`ml-3 px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
-              location.pathname === "/login"
-                ? "bg-green-700 text-white"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-          >
-            Login
-          </Link>
+          {authButton()}
         </div>
 
         {/* Mobile Toggle */}
@@ -76,19 +91,7 @@ const Navbar = () => {
               {link.label}
             </Link>
           ))}
-
-          {/* Mobile Login */}
-          <Link
-            to="/login"
-            onClick={() => setOpen(false)}
-            className={`block text-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-              location.pathname === "/login"
-                ? "bg-green-700 text-white"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-          >
-            Login
-          </Link>
+          {authButton(true)}
         </div>
       )}
     </nav>

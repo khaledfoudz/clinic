@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -12,35 +12,32 @@ const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 const Login = () => {
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]   = useState(false);
+
+  const emailRef    = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  // Focus email on mount
+  useEffect(() => { emailRef.current?.focus(); }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
       toast.error("Please fill all fields");
       return;
     }
-
     setLoading(true);
-
     try {
       const response = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed");
-      }
-
-      // Save token and user info
+      if (!response.ok) throw new Error(data.error || "Login failed");
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
-
       toast.success("Login successful");
       navigate("/");
     } catch (err) {
@@ -48,6 +45,14 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Enter key: email → password → submit
+  const handleEmailKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") { e.preventDefault(); passwordRef.current?.focus(); }
+  };
+  const handlePasswordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") { e.preventDefault(); handleLogin(); }
   };
 
   return (
@@ -59,43 +64,37 @@ const Login = () => {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* Email */}
           <div className="space-y-2">
             <Label>Email</Label>
             <Input
+              ref={emailRef}
               type="email"
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={handleEmailKeyDown}
             />
           </div>
 
-          {/* Password */}
           <div className="space-y-2">
             <Label>Password</Label>
             <Input
+              ref={passwordRef}
               type="password"
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={handlePasswordKeyDown}
             />
           </div>
 
-          {/* Button */}
-          <Button
-            className="w-full"
-            onClick={handleLogin}
-            disabled={loading}
-          >
+          <Button className="w-full" onClick={handleLogin} disabled={loading}>
             {loading ? "Logging in..." : "Login"}
           </Button>
 
-          {/* Signup link */}
           <p className="text-sm text-center text-muted-foreground">
             Don't have an account?{" "}
-            <Link to="/signup" className="text-primary hover:underline">
-              Sign up
-            </Link>
+            <Link to="/signup" className="text-primary hover:underline">Sign up</Link>
           </p>
         </CardContent>
       </Card>
