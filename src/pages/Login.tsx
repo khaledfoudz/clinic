@@ -5,12 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/context/AuthContext";
 import logo from "@/assets/logo.png";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -19,7 +21,6 @@ const Login = () => {
   const emailRef    = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  // Focus email on mount
   useEffect(() => { emailRef.current?.focus(); }, []);
 
   const handleLogin = async () => {
@@ -36,8 +37,8 @@ const Login = () => {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Login failed");
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+
+      login(data.token, data.user); // ✅ updates context state + localStorage
       toast.success("Login successful");
       navigate("/");
     } catch (err) {
@@ -47,7 +48,6 @@ const Login = () => {
     }
   };
 
-  // Enter key: email → password → submit
   const handleEmailKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") { e.preventDefault(); passwordRef.current?.focus(); }
   };

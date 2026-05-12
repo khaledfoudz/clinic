@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 import logo from "@/assets/logo.png";
 
 const navLinks = [
@@ -11,31 +12,36 @@ const navLinks = [
 const Navbar = () => {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated, logout } = useAuth();
 
-  // Replace this with your real auth state (e.g. from context or zustand)
-  const isLoggedIn = false;
-
-  const handleAuthAction = () => {
-    if (isLoggedIn) {
-      // your logout logic here
-    }
+  const handleLogout = () => {
+    logout(); // ✅ clears context state + localStorage
     setOpen(false);
+    navigate("/login");
   };
 
   const authButton = (mobile = false) => (
-    <Link
-      to={isLoggedIn ? "/" : "/login"}
-      onClick={handleAuthAction}
-      className={`${mobile ? "block text-center" : "ml-3"} px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
-        isLoggedIn
-          ? "bg-[#C0392B] text-white hover:bg-[#a93226]"
-          : location.pathname === "/login"
-          ? "bg-[#1A2744] text-white"
-          : "bg-[#1A2744] text-white hover:bg-[#243660]"
-      }`}
-    >
-      {isLoggedIn ? "Log Out" : "Login"}
-    </Link>
+    isAuthenticated ? (
+      <button
+        onClick={handleLogout}
+        className={`${mobile ? "block w-full text-center" : "ml-3"} px-5 py-2 rounded-lg text-sm font-medium transition-colors bg-[#C0392B] text-white hover:bg-[#a93226]`}
+      >
+        Log Out
+      </button>
+    ) : (
+      <Link
+        to="/login"
+        onClick={() => setOpen(false)}
+        className={`${mobile ? "block text-center" : "ml-3"} px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+          location.pathname === "/login"
+            ? "bg-[#1A2744] text-white"
+            : "bg-[#1A2744] text-white hover:bg-[#243660]"
+        }`}
+      >
+        Login
+      </Link>
+    )
   );
 
   return (
