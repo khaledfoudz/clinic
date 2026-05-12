@@ -607,11 +607,11 @@ const Index = () => {
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label className="flex items-center gap-1"><Paperclip size={14} /> Diagnostics (PDF)</Label>
-                  <Input 
-                    ref={diagnosticsRef}
-                    type="file" 
-                    accept=".pdf"
+                <Label className="flex items-center gap-1"><Paperclip size={14} /> Diagnostics (PDF / Image)</Label>
+                <Input 
+                  ref={diagnosticsRef}
+                  type="file" 
+                  accept=".pdf,image/*"
                     onChange={(e) => {
                       const file = e.target.files?.[0] || null;
                       handlePetChange("diagnostics_file", file as any);
@@ -729,11 +729,11 @@ const Index = () => {
                   </Popover>
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <Label className="flex items-center gap-1"><Paperclip size={14} /> Today's Visit Attachment (PDF)</Label>
-                  <Input 
-                    ref={todayVisitRef}
-                    type="file" 
-                    accept=".pdf"
+                <Label className="flex items-center gap-1"><Paperclip size={14} /> Today's Visit Attachment (PDF / Image)</Label>
+                <Input 
+                  ref={todayVisitRef}
+                  type="file" 
+                  accept=".pdf,image/*"
                     onChange={(e) => {
                       const file = e.target.files?.[0] || null;
                       handlePetChange("today_visit_file", file as any);
