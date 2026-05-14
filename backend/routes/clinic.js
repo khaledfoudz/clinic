@@ -12,28 +12,31 @@ const fileUpload = upload.fields([
     { name: 'today_visit',  maxCount: 1 },
 ]);
 
-// ── Owners ───────────────────────────────────────────────────
-// GET    /api/owners              → all owners + their pets (nested)
-// GET    /api/owners/:id          → one owner + their pets
-// POST   /api/owners              → create new owner + first pet
-// PUT    /api/owners/:id          → update owner info only
-// DELETE /api/owners/:id          → delete owner AND all their pets
+// Wraps multer so that if no files are sent (or multer fails),
+// req.body is still populated and we don't get "req.body is undefined".
+const handleUpload = (req, res, next) => {
+    fileUpload(req, res, (err) => {
+        if (err) {
+            console.error('Multer error:', err);
+            return res.status(400).json({ error: err.message });
+        }
+        // Multer v2 + Express v5: guarantee req.body is always an object
+        req.body = req.body || {};
+        next();
+    });
+};
 
+// ── Owners ───────────────────────────────────────────────────
 router.get('/owners',        getAllOwners);
 router.get('/owners/:id',    getOwnerById);
-router.post('/owners',       fileUpload, createOwnerWithPet);
+router.post('/owners',       handleUpload, createOwnerWithPet);
 router.put('/owners/:id',    updateOwner);
 router.delete('/owners/:id', deleteOwner);
 
 // ── Pets ─────────────────────────────────────────────────────
-// GET    /api/owners/:ownerId/pets/:petId  → get one pet
-// POST   /api/owners/:ownerId/pets         → add a pet to existing owner
-// PUT    /api/pets/:petId                  → update a pet
-// DELETE /api/pets/:petId                  → delete one pet (owner row stays)
-
 router.get('/owners/:ownerId/pets/:petId', getPetById);
-router.post('/owners/:ownerId/pets',       fileUpload, addPetToOwner);
-router.put('/pets/:petId',                 fileUpload, updatePet);
+router.post('/owners/:ownerId/pets',       handleUpload, addPetToOwner);
+router.put('/pets/:petId',                 handleUpload, updatePet);
 router.delete('/pets/:petId',              deletePet);
 
 export default router;

@@ -13,19 +13,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface PetForm {
   id: number;
   pet_name: string;
   birth_date: Date | undefined;
-  age: string;
   type: string;
   gender: string;
-  spayed_neutered: string;
-  weight_kg: string;
   disease_history: string;
   vaccination_history: string;
+  // visit fields
+  visit_date: Date | undefined;
+  spayed_neutered: string;
+  weight_kg: string;
   diagnostics_file: File | null;
   diagnostics_filename: string;
   what_was_done_today: string;
@@ -42,273 +41,183 @@ interface OwnerForm {
   address: string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
 const calculateAge = (birthDate: Date | undefined): string => {
-  if (!birthDate) return "";
+  if (!birthDate) return "—";
   const today = new Date();
-  const birth = new Date(birthDate);
-  
-  let years = today.getFullYear() - birth.getFullYear();
-  let months = today.getMonth() - birth.getMonth();
-  
-  if (months < 0) {
-    years--;
-    months += 12;
-  }
-  
-  if (years === 0) {
-    return `${months} month${months !== 1 ? 's' : ''}`;
-  } else if (months === 0) {
-    return `${years} year${years !== 1 ? 's' : ''}`;
-  } else {
-    return `${years} year${years !== 1 ? 's' : ''}, ${months} month${months !== 1 ? 's' : ''}`;
-  }
+  let years  = today.getFullYear() - birthDate.getFullYear();
+  let months = today.getMonth()    - birthDate.getMonth();
+  if (months < 0) { years--; months += 12; }
+  if (years  === 0) return `${months} month${months !== 1 ? "s" : ""}`;
+  if (months === 0) return `${years} year${years !== 1 ? "s" : ""}`;
+  return `${years} year${years !== 1 ? "s" : ""}, ${months} month${months !== 1 ? "s" : ""}`;
 };
 
 const defaultPet = (id: number): PetForm => ({
-  id,
-  pet_name: "",
-  birth_date: undefined,
-  age: "",
-  type: "",
-  gender: "",
-  spayed_neutered: "",
-  weight_kg: "",
-  disease_history: "",
-  vaccination_history: "",
-  diagnostics_file: null,
-  diagnostics_filename: "",
-  what_was_done_today: "",
-  diagnosis: "",
-  treatment: "",
-  today_visit_file: null,
-  today_visit_filename: "",
-  follow_up_date: undefined,
+  id, pet_name: "", birth_date: undefined, type: "", gender: "",
+  disease_history: "", vaccination_history: "",
+  visit_date: new Date(), spayed_neutered: "", weight_kg: "",
+  diagnostics_file: null, diagnostics_filename: "",
+  what_was_done_today: "", diagnosis: "", treatment: "",
+  today_visit_file: null, today_visit_filename: "", follow_up_date: undefined,
 });
 
-// Builds a FormData object for one pet (no owner fields inside)
-const buildPetFormData = (pet: PetForm): FormData => {
-  const fd = new FormData();
-  fd.append("pet_name", pet.pet_name);
-  if (pet.birth_date) fd.append("birth_date", format(pet.birth_date, "yyyy-MM-dd"));
-  fd.append("age", pet.age);
-  if (pet.type)   fd.append("type",   pet.type.charAt(0).toUpperCase()   + pet.type.slice(1));
-  if (pet.gender) fd.append("gender", pet.gender.charAt(0).toUpperCase() + pet.gender.slice(1));
-  if (pet.spayed_neutered) fd.append("spayed_neutered", pet.spayed_neutered === "yes" ? "Yes" : "No");
-  if (pet.weight_kg)           fd.append("weight_kg",           pet.weight_kg);
-  if (pet.disease_history)     fd.append("disease_history",     pet.disease_history);
-  if (pet.vaccination_history) fd.append("vaccination_history", pet.vaccination_history);
-  if (pet.what_was_done_today) fd.append("what_was_done_today", pet.what_was_done_today);
-  if (pet.diagnosis)           fd.append("diagnosis",           pet.diagnosis);
-  if (pet.treatment)           fd.append("treatment",           pet.treatment);
-  if (pet.follow_up_date)      fd.append("follow_up_date",      format(pet.follow_up_date, "yyyy-MM-dd"));
-  if (pet.diagnostics_file)    fd.append("diagnostics",         pet.diagnostics_file);
-  if (pet.today_visit_file)    fd.append("today_visit",         pet.today_visit_file);
-  return fd;
-};
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
 const Index = () => {
-  const [step, setStep] = useState(1); // 1=Owner, 2=Basic, 3=Medical, 4=Visit, 5=Review
-  const ownerNameRef = useRef<HTMLInputElement>(null);
-  const petNameRef = useRef<HTMLInputElement>(null);
-  const mobileRef = useRef<HTMLInputElement>(null);
-  const addressRef = useRef<HTMLInputElement>(null);
-  const birthDateRef = useRef<HTMLButtonElement>(null);
-  const typeRef = useRef<HTMLButtonElement>(null);
-  const genderRef = useRef<HTMLButtonElement>(null);
-  const spayedRef = useRef<HTMLButtonElement>(null);
-  const weightRef = useRef<HTMLInputElement>(null);
-  const addPetRef = useRef<HTMLButtonElement>(null);
-  const diseaseRef = useRef<HTMLTextAreaElement>(null);
-  const vaccinationRef = useRef<HTMLTextAreaElement>(null);
-  const diagnosticsRef = useRef<HTMLInputElement>(null);
-  const whatDoneRef = useRef<HTMLTextAreaElement>(null);
-  const diagnosisRef = useRef<HTMLTextAreaElement>(null);
-  const treatmentRef = useRef<HTMLTextAreaElement>(null);
-  const followUpRef = useRef<HTMLButtonElement>(null);
-  const todayVisitRef = useRef<HTMLInputElement>(null);
-
-  const [owner, setOwner] = useState<OwnerForm>({
-    owner_name: "",
-    mobile_number: "",
-    address: "",
-  });
-
+  const [step, setStep] = useState(1);
+  const [owner, setOwner] = useState<OwnerForm>({ owner_name: "", mobile_number: "", address: "" });
   const [pets, setPets] = useState<PetForm[]>([defaultPet(1)]);
   const [nextId, setNextId] = useState(2);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentPetIndex, setCurrentPetIndex] = useState(0);
-
   const currentPet = pets[currentPetIndex];
 
-  // Focus first input on step change
+  const ownerNameRef   = useRef<HTMLInputElement>(null);
+  const mobileRef      = useRef<HTMLInputElement>(null);
+  const addressRef     = useRef<HTMLInputElement>(null);
+  const petNameRef     = useRef<HTMLInputElement>(null);
+  const birthDateRef   = useRef<HTMLButtonElement>(null);
+  const typeRef        = useRef<HTMLButtonElement>(null);
+  const genderRef      = useRef<HTMLButtonElement>(null);
+  const diseaseRef     = useRef<HTMLTextAreaElement>(null);
+  const vaccinationRef = useRef<HTMLTextAreaElement>(null);
+  const spayedRef      = useRef<HTMLButtonElement>(null);
+  const weightRef      = useRef<HTMLInputElement>(null);
+  const diagnosticsRef = useRef<HTMLInputElement>(null);
+  const whatDoneRef    = useRef<HTMLTextAreaElement>(null);
+  const diagnosisRef   = useRef<HTMLTextAreaElement>(null);
+  const treatmentRef   = useRef<HTMLTextAreaElement>(null);
+  const followUpRef    = useRef<HTMLButtonElement>(null);
+  const todayVisitRef  = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
-    if (step === 1 && ownerNameRef.current) ownerNameRef.current.focus();
-    if (step === 2 && petNameRef.current) petNameRef.current.focus();
-    if (step === 3 && diseaseRef.current) diseaseRef.current.focus();
-    if (step === 4 && whatDoneRef.current) whatDoneRef.current.focus();
+    if (step === 1) ownerNameRef.current?.focus();
+    if (step === 2) petNameRef.current?.focus();
+    if (step === 3) diseaseRef.current?.focus();
+    if (step === 4) spayedRef.current?.focus();
   }, [step]);
 
-  // ── Enhanced Enter key handler ──────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey && !isSubmitting) {
-        const target = e.target as HTMLElement;
-        
-        // Allow Enter in textareas for new lines
-        if (target.tagName === 'TEXTAREA') {
-          return;
-        }
-        
-        e.preventDefault();
-        
-        // If on last step, submit
-        if (step === 5) {
-          handleSubmit();
-          return;
-        }
-        
-        // Define focus order for each step
-        const focusOrders: { [key: number]: (HTMLElement | null)[] } = {
-          1: [ownerNameRef.current, mobileRef.current, addressRef.current],
-          2: [petNameRef.current, birthDateRef.current, typeRef.current, genderRef.current, spayedRef.current, weightRef.current, addPetRef.current],
-          3: [diseaseRef.current, vaccinationRef.current, diagnosticsRef.current],
-          4: [whatDoneRef.current, diagnosisRef.current, treatmentRef.current, followUpRef.current, todayVisitRef.current],
-        };
-        
-        const currentStepFields = focusOrders[step];
-        if (!currentStepFields) {
-          handleNext();
-          return;
-        }
-        
-        const currentIndex = currentStepFields.findIndex(field => field === target);
-        
-        // If current field is found and it's not the last field, focus next field
-        if (currentIndex !== -1 && currentIndex < currentStepFields.length - 1) {
-          const nextField = currentStepFields[currentIndex + 1];
-          if (nextField) {
-            nextField.focus();
-            // For select triggers, simulate click to open dropdown
-            if (nextField.getAttribute('role') === 'combobox' || nextField.classList.contains('justify-between')) {
-              (nextField as HTMLButtonElement).click();
-            }
-          }
-        } else {
-          // At the last field, move to next step
-          handleNext();
-        }
+      if (e.key !== "Enter" || e.shiftKey || isSubmitting) return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === "TEXTAREA") return;
+      e.preventDefault();
+      if (step === 5) { handleSubmit(); return; }
+      const focusOrders: { [key: number]: (HTMLElement | null)[] } = {
+        1: [ownerNameRef.current, mobileRef.current, addressRef.current],
+        2: [petNameRef.current, birthDateRef.current, typeRef.current, genderRef.current],
+        3: [diseaseRef.current, vaccinationRef.current],
+        4: [spayedRef.current, weightRef.current, diagnosticsRef.current, whatDoneRef.current, diagnosisRef.current, treatmentRef.current, followUpRef.current, todayVisitRef.current],
+      };
+      const fields = focusOrders[step] || [];
+      const idx = fields.findIndex((f) => f === target);
+      if (idx !== -1 && idx < fields.length - 1) {
+        fields[idx + 1]?.focus();
+      } else {
+        handleNext();
       }
     };
-    
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [step, owner, currentPet, isSubmitting]);
 
-  // ── Owner helpers ──────────────────────────────────────────────────────────
-
-  const handleOwnerChange = (field: keyof OwnerForm, value: string) => {
+  const handleOwnerChange = (field: keyof OwnerForm, value: string) =>
     setOwner((prev) => ({ ...prev, [field]: value }));
-  };
 
-  // ── Pet helpers ────────────────────────────────────────────────────────────
-
-  const handlePetChange = (field: keyof PetForm, value: string | Date | undefined | File | null) => {
-    setPets((prev) =>
-      prev.map((p) => (p.id === currentPet.id ? { ...p, [field]: value } : p))
-    );
-  };
+  const handlePetChange = (field: keyof PetForm, value: any) =>
+    setPets((prev) => prev.map((p) => p.id === currentPet.id ? { ...p, [field]: value } : p));
 
   const addPet = () => {
     const newPet = defaultPet(nextId);
     setPets((prev) => [...prev, newPet]);
     setNextId((n) => n + 1);
     setCurrentPetIndex(pets.length);
-    // Focus the new pet's name field after a short delay
-    setTimeout(() => {
-      if (petNameRef.current) petNameRef.current.focus();
-    }, 100);
+    setTimeout(() => petNameRef.current?.focus(), 100);
   };
-
-  const removePet = (id: number) => {
-    if (pets.length > 1) {
-      setPets((prev) => prev.filter((p) => p.id !== id));
-      if (currentPetIndex >= pets.length - 1) {
-        setCurrentPetIndex(pets.length - 2);
-      }
-    }
-  };
-
-  // ── Navigation ────────────────────────────────────────────────────────────
 
   const handleNext = () => {
     if (step === 1) {
-      if (!owner.owner_name.trim())    { toast.error("Owner name is required"); ownerNameRef.current?.focus(); return; }
-      if (!owner.mobile_number.trim()) { toast.error("Mobile number is required"); mobileRef.current?.focus(); return; }
+      if (!owner.owner_name.trim())    { toast.error("Owner name is required");   ownerNameRef.current?.focus(); return; }
+      if (!owner.mobile_number.trim()) { toast.error("Mobile number is required"); mobileRef.current?.focus();   return; }
       setStep(2);
-      setTimeout(() => petNameRef.current?.focus(), 100);
     } else if (step === 2) {
       if (!currentPet.pet_name.trim()) { toast.error("Pet name is required"); petNameRef.current?.focus(); return; }
       setStep(3);
-      setTimeout(() => diseaseRef.current?.focus(), 100);
     } else if (step === 3) {
       setStep(4);
-      setTimeout(() => whatDoneRef.current?.focus(), 100);
     } else if (step === 4) {
       setStep(5);
     }
   };
 
-  const handleBack = () => {
-    if (step > 1) setStep(step - 1);
-  };
-
-  // ── Submit ─────────────────────────────────────────────────────────────────
-  // 1. POST /api/owners  →  owner info + first pet  →  get back owner_id
-  // 2. For each extra pet: POST /api/owners/:owner_id/pets
+  const handleBack = () => { if (step > 1) setStep(step - 1); };
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // ── Step 1: Create owner + first pet ──────────────────────────────
-      const firstFd = buildPetFormData(pets[0]);
+      // Build first pet + first visit FormData
+      const firstFd = new FormData();
       firstFd.append("owner_name",    owner.owner_name);
       firstFd.append("mobile_number", owner.mobile_number);
       firstFd.append("address",       owner.address);
 
-      const firstRes = await fetch(`${API_BASE}/api/owners`, {
-        method: "POST",
-        body: firstFd,
-      });
+      const p = pets[0];
+      firstFd.append("pet_name", p.pet_name);
+      if (p.birth_date) firstFd.append("birth_date", format(p.birth_date, "yyyy-MM-dd"));
+      if (p.type)   firstFd.append("type",   p.type.charAt(0).toUpperCase()   + p.type.slice(1));
+      if (p.gender) firstFd.append("gender", p.gender.charAt(0).toUpperCase() + p.gender.slice(1));
+      if (p.disease_history)     firstFd.append("disease_history",     p.disease_history);
+      if (p.vaccination_history) firstFd.append("vaccination_history", p.vaccination_history);
+      // visit fields
+      if (p.visit_date)          firstFd.append("visit_date",          format(p.visit_date, "yyyy-MM-dd"));
+      if (p.spayed_neutered)     firstFd.append("spayed_neutered",     p.spayed_neutered === "yes" ? "Yes" : "No");
+      if (p.weight_kg)           firstFd.append("weight_kg",           p.weight_kg);
+      if (p.what_was_done_today) firstFd.append("what_was_done_today", p.what_was_done_today);
+      if (p.diagnosis)           firstFd.append("diagnosis",           p.diagnosis);
+      if (p.treatment)           firstFd.append("treatment",           p.treatment);
+      if (p.follow_up_date)      firstFd.append("follow_up_date",      format(p.follow_up_date, "yyyy-MM-dd"));
+      if (p.diagnostics_file)    firstFd.append("diagnostics",         p.diagnostics_file);
+      if (p.today_visit_file)    firstFd.append("today_visit",         p.today_visit_file);
 
+      const firstRes = await fetch(`${API_BASE}/api/owners`, { method: "POST", body: firstFd });
       if (!firstRes.ok) {
         const err = await firstRes.json().catch(() => ({}));
         throw new Error(err.error ?? "Failed to create record");
       }
-
       const firstData = await firstRes.json();
       const ownerId: number = firstData.data.id;
 
-      // ── Step 2: Add any additional pets ───────────────────────────────
+      // Additional pets
       if (pets.length > 1) {
-        const extraRes = await Promise.all(
-          pets.slice(1).map((pet) =>
-            fetch(`${API_BASE}/api/owners/${ownerId}/pets`, {
-              method: "POST",
-              body: buildPetFormData(pet),
-            })
-          )
-        );
+        for (const pet of pets.slice(1)) {
+          // add pet profile
+          const petFd = new FormData();
+          petFd.append("pet_name", pet.pet_name);
+          if (pet.birth_date) petFd.append("birth_date", format(pet.birth_date, "yyyy-MM-dd"));
+          if (pet.type)   petFd.append("type",   pet.type.charAt(0).toUpperCase()   + pet.type.slice(1));
+          if (pet.gender) petFd.append("gender", pet.gender.charAt(0).toUpperCase() + pet.gender.slice(1));
+          if (pet.disease_history)     petFd.append("disease_history",     pet.disease_history);
+          if (pet.vaccination_history) petFd.append("vaccination_history", pet.vaccination_history);
 
-        const failed = extraRes.filter((r) => !r.ok);
-        if (failed.length > 0) {
-          const errData = await failed[0].json().catch(() => ({}));
-          throw new Error(errData.error ?? "Failed to save one or more pets");
+          const petRes = await fetch(`${API_BASE}/api/owners/${ownerId}/pets`, { method: "POST", body: petFd });
+          if (!petRes.ok) throw new Error("Failed to save pet");
+          const petData = await petRes.json();
+          const petId = petData.data.id;
+
+          // add first visit for this pet
+          const visitFd = new FormData();
+          if (pet.visit_date)          visitFd.append("visit_date",          format(pet.visit_date, "yyyy-MM-dd"));
+          if (pet.spayed_neutered)     visitFd.append("spayed_neutered",     pet.spayed_neutered === "yes" ? "Yes" : "No");
+          if (pet.weight_kg)           visitFd.append("weight_kg",           pet.weight_kg);
+          if (pet.what_was_done_today) visitFd.append("what_was_done_today", pet.what_was_done_today);
+          if (pet.diagnosis)           visitFd.append("diagnosis",           pet.diagnosis);
+          if (pet.treatment)           visitFd.append("treatment",           pet.treatment);
+          if (pet.follow_up_date)      visitFd.append("follow_up_date",      format(pet.follow_up_date, "yyyy-MM-dd"));
+          if (pet.diagnostics_file)    visitFd.append("diagnostics",         pet.diagnostics_file);
+          if (pet.today_visit_file)    visitFd.append("today_visit",         pet.today_visit_file);
+
+          await fetch(`${API_BASE}/api/pets/${petId}/visits`, { method: "POST", body: visitFd });
         }
       }
 
@@ -325,11 +234,7 @@ const Index = () => {
     }
   };
 
-  // ── Step indicator ─────────────────────────────────────────────────────────
-
   const steps = ["Owner", "Basic Details", "Medical History", "Today's Visit", "Review"];
-
-  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-background">
@@ -338,12 +243,8 @@ const Index = () => {
           <div className="flex items-center gap-3">
             <ClipboardList className="text-primary-foreground" size={28} />
             <div>
-              <h1 className="text-2xl md:text-3xl font-serif font-bold text-primary-foreground">
-                Patient Registration
-              </h1>
-              <p className="text-primary-foreground/70 text-sm mt-0.5">
-                Step {step} of 5: {steps[step - 1]} (Press Enter to navigate)
-              </p>
+              <h1 className="text-2xl md:text-3xl font-serif font-bold text-primary-foreground">Patient Registration</h1>
+              <p className="text-primary-foreground/70 text-sm mt-0.5">Step {step} of 5: {steps[step - 1]}</p>
             </div>
           </div>
         </div>
@@ -357,8 +258,7 @@ const Index = () => {
               <div className={cn(
                 "h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold",
                 i + 1 === step ? "bg-primary text-primary-foreground" :
-                i + 1 < step ? "bg-primary/20 text-primary" :
-                "bg-muted text-muted-foreground"
+                i + 1 < step   ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
               )}>
                 {i + 1 < step ? <Check size={14} /> : i + 1}
               </div>
@@ -368,7 +268,7 @@ const Index = () => {
           ))}
         </div>
 
-        {/* Step 1: Owner Information */}
+        {/* Step 1: Owner */}
         {step === 1 && (
           <Card className="mb-6 border-border shadow-sm">
             <CardHeader className="pb-4">
@@ -383,31 +283,15 @@ const Index = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Owner Name *</Label>
-                  <Input
-                    ref={ownerNameRef}
-                    placeholder="e.g. Ahmed Mohamed"
-                    value={owner.owner_name}
-                    onChange={(e) => handleOwnerChange("owner_name", e.target.value)}
-                  />
+                  <Input ref={ownerNameRef} placeholder="e.g. Ahmed Mohamed" value={owner.owner_name} onChange={(e) => handleOwnerChange("owner_name", e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>Mobile Number *</Label>
-                  <Input
-                    ref={mobileRef}
-                    placeholder="e.g. +20 100 123 4567"
-                    type="tel"
-                    value={owner.mobile_number}
-                    onChange={(e) => handleOwnerChange("mobile_number", e.target.value)}
-                  />
+                  <Input ref={mobileRef} placeholder="e.g. +20 100 123 4567" type="tel" value={owner.mobile_number} onChange={(e) => handleOwnerChange("mobile_number", e.target.value)} />
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <Label>Address</Label>
-                  <Input
-                    ref={addressRef}
-                    placeholder="e.g. 15 El-Tahrir St, Cairo"
-                    value={owner.address}
-                    onChange={(e) => handleOwnerChange("address", e.target.value)}
-                  />
+                  <Input ref={addressRef} placeholder="e.g. 15 El-Tahrir St, Cairo" value={owner.address} onChange={(e) => handleOwnerChange("address", e.target.value)} />
                 </div>
               </div>
             </CardContent>
@@ -428,12 +312,7 @@ const Index = () => {
                 {pets.length > 1 && (
                   <div className="flex items-center gap-2">
                     {pets.map((pet, idx) => (
-                      <Button
-                        key={pet.id}
-                        variant={idx === currentPetIndex ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setCurrentPetIndex(idx)}
-                      >
+                      <Button key={pet.id} variant={idx === currentPetIndex ? "default" : "outline"} size="sm" onClick={() => setCurrentPetIndex(idx)}>
                         Pet {idx + 1}
                       </Button>
                     ))}
@@ -445,50 +324,30 @@ const Index = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label>Pet Name *</Label>
-                  <Input
-                    ref={petNameRef}
-                    placeholder="e.g. Buddy"
-                    value={currentPet.pet_name}
-                    onChange={(e) => handlePetChange("pet_name", e.target.value)}
-                  />
+                  <Input ref={petNameRef} placeholder="e.g. Buddy" value={currentPet.pet_name} onChange={(e) => handlePetChange("pet_name", e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>Birthdate</Label>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button
-                        ref={birthDateRef}
-                        variant="outline"
-                        className={cn("w-full justify-start text-left font-normal", !currentPet.birth_date && "text-muted-foreground")}
-                      >
+                      <Button ref={birthDateRef} variant="outline" className={cn("w-full justify-start text-left font-normal", !currentPet.birth_date && "text-muted-foreground")}>
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {currentPet.birth_date ? format(currentPet.birth_date, "PPP") : "Pick a date"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={currentPet.birth_date}
-                        onSelect={(date) => {
-                          handlePetChange("birth_date", date);
-                          handlePetChange("age", calculateAge(date));
-                        }}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
+                      <Calendar mode="single" selected={currentPet.birth_date} onSelect={(date) => handlePetChange("birth_date", date)} initialFocus className="p-3 pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
                 </div>
                 <div className="space-y-2">
                   <Label>Age</Label>
-                  <Input value={currentPet.age} readOnly className="bg-muted/50 cursor-default" placeholder="Auto-calculated" />
+                  <Input value={calculateAge(currentPet.birth_date)} readOnly className="bg-muted/50 cursor-default" placeholder="Auto-calculated" />
                 </div>
                 <div className="space-y-2">
                   <Label>Type</Label>
                   <Select value={currentPet.type} onValueChange={(v) => handlePetChange("type", v)}>
-                    <SelectTrigger ref={typeRef}>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
+                    <SelectTrigger ref={typeRef}><SelectValue placeholder="Select type" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="cat">🐱 Cat</SelectItem>
                       <SelectItem value="dog">🐶 Dog</SelectItem>
@@ -498,46 +357,16 @@ const Index = () => {
                 <div className="space-y-2">
                   <Label>Gender</Label>
                   <Select value={currentPet.gender} onValueChange={(v) => handlePetChange("gender", v)}>
-                    <SelectTrigger ref={genderRef}>
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
+                    <SelectTrigger ref={genderRef}><SelectValue placeholder="Select gender" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="male">Male</SelectItem>
                       <SelectItem value="female">Female</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Spayed / Neutered</Label>
-                  <Select value={currentPet.spayed_neutered} onValueChange={(v) => handlePetChange("spayed_neutered", v)}>
-                    <SelectTrigger ref={spayedRef}>
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="yes">Yes</SelectItem>
-                      <SelectItem value="no">No</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Weight (kg)</Label>
-                  <Input
-                    ref={weightRef}
-                    placeholder="e.g. 4.5"
-                    type="number" min="0" step="0.1"
-                    value={currentPet.weight_kg}
-                    onChange={(e) => handlePetChange("weight_kg", e.target.value)}
-                  />
-                </div>
               </div>
-              {/* Add Pet Button */}
               <div className="mt-6">
-                <Button
-                  ref={addPetRef}
-                  variant="outline"
-                  onClick={addPet}
-                  className="w-full border-dashed border-2 border-primary/30 text-primary hover:bg-primary/5 hover:border-primary/50 py-6 text-base"
-                >
+                <Button variant="outline" onClick={addPet} className="w-full border-dashed border-2 border-primary/30 text-primary hover:bg-primary/5 hover:border-primary/50 py-6 text-base">
                   <Plus size={20} className="mr-2" /> Add Another Pet for Same Owner
                 </Button>
               </div>
@@ -551,23 +380,14 @@ const Index = () => {
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg font-serif">
                 <Stethoscope size={16} className="text-primary" /> Medical History
-                {pets.length > 1 && (
-                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                    — {currentPet.pet_name || `Pet ${currentPetIndex + 1}`}
-                  </span>
-                )}
+                {pets.length > 1 && <span className="text-sm font-normal text-muted-foreground ml-2">— {currentPet.pet_name || `Pet ${currentPetIndex + 1}`}</span>}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {pets.length > 1 && (
                 <div className="flex items-center gap-2 mb-4">
                   {pets.map((pet, idx) => (
-                    <Button
-                      key={pet.id}
-                      variant={idx === currentPetIndex ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentPetIndex(idx)}
-                    >
+                    <Button key={pet.id} variant={idx === currentPetIndex ? "default" : "outline"} size="sm" onClick={() => setCurrentPetIndex(idx)}>
                       {pet.pet_name || `Pet ${idx + 1}`}
                     </Button>
                   ))}
@@ -576,51 +396,13 @@ const Index = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Disease History</Label>
-                  <Textarea 
-                    ref={diseaseRef}
-                    placeholder="Previous diseases, chronic conditions..." 
-                    rows={3}
-                    value={currentPet.disease_history}
-                    onChange={(e) => handlePetChange("disease_history", e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        vaccinationRef.current?.focus();
-                      }
-                    }}
-                  />
+                  <Textarea ref={diseaseRef} placeholder="Previous diseases, chronic conditions..." rows={3} value={currentPet.disease_history} onChange={(e) => handlePetChange("disease_history", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); vaccinationRef.current?.focus(); } }} />
                 </div>
                 <div className="space-y-2">
                   <Label>Vaccination History</Label>
-                  <Textarea 
-                    ref={vaccinationRef}
-                    placeholder="Vaccines administered, dates..." 
-                    rows={3}
-                    value={currentPet.vaccination_history}
-                    onChange={(e) => handlePetChange("vaccination_history", e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        diagnosticsRef.current?.focus();
-                      }
-                    }}
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                <Label className="flex items-center gap-1"><Paperclip size={14} /> Diagnostics (PDF / Image)</Label>
-                <Input 
-                  ref={diagnosticsRef}
-                  type="file" 
-                  accept=".pdf,image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
-                      handlePetChange("diagnostics_file", file as any);
-                      handlePetChange("diagnostics_filename", file?.name || "");
-                    }}
-                  />
-                  {currentPet.diagnostics_filename && (
-                    <p className="text-xs text-muted-foreground">Selected: {currentPet.diagnostics_filename}</p>
-                  )}
+                  <Textarea ref={vaccinationRef} placeholder="Vaccines administered, dates..." rows={3} value={currentPet.vaccination_history} onChange={(e) => handlePetChange("vaccination_history", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleNext(); } }} />
                 </div>
               </div>
             </CardContent>
@@ -633,23 +415,14 @@ const Index = () => {
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-lg font-serif">
                 <ClipboardList size={16} className="text-primary" /> Today's Visit
-                {pets.length > 1 && (
-                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                    — {currentPet.pet_name || `Pet ${currentPetIndex + 1}`}
-                  </span>
-                )}
+                {pets.length > 1 && <span className="text-sm font-normal text-muted-foreground ml-2">— {currentPet.pet_name || `Pet ${currentPetIndex + 1}`}</span>}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {pets.length > 1 && (
                 <div className="flex items-center gap-2 mb-4">
                   {pets.map((pet, idx) => (
-                    <Button
-                      key={pet.id}
-                      variant={idx === currentPetIndex ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentPetIndex(idx)}
-                    >
+                    <Button key={pet.id} variant={idx === currentPetIndex ? "default" : "outline"} size="sm" onClick={() => setCurrentPetIndex(idx)}>
                       {pet.pet_name || `Pet ${idx + 1}`}
                     </Button>
                   ))}
@@ -657,92 +430,81 @@ const Index = () => {
               )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
+                  <Label>Visit Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !currentPet.visit_date && "text-muted-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {currentPet.visit_date ? format(currentPet.visit_date, "PPP") : "Pick visit date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={currentPet.visit_date} onSelect={(date) => handlePetChange("visit_date", date)} initialFocus className="p-3 pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label>Spayed / Neutered</Label>
+                  <Select value={currentPet.spayed_neutered} onValueChange={(v) => handlePetChange("spayed_neutered", v)}>
+                    <SelectTrigger ref={spayedRef}><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Yes</SelectItem>
+                      <SelectItem value="no">No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Weight (kg)</Label>
+                  <Input ref={weightRef} placeholder="e.g. 4.5" type="number" min="0" step="0.1" value={currentPet.weight_kg} onChange={(e) => handlePetChange("weight_kg", e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1"><Paperclip size={14} /> Diagnostics (PDF / Image)</Label>
+                  <Input ref={diagnosticsRef} type="file" accept=".pdf,image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      handlePetChange("diagnostics_file", file);
+                      handlePetChange("diagnostics_filename", file?.name || "");
+                    }} />
+                  {currentPet.diagnostics_filename && <p className="text-xs text-muted-foreground">Selected: {currentPet.diagnostics_filename}</p>}
+                </div>
+                <div className="space-y-2">
                   <Label>What was done today</Label>
-                  <Textarea 
-                    ref={whatDoneRef}
-                    placeholder="Examination, procedures performed..." 
-                    rows={3}
-                    value={currentPet.what_was_done_today}
-                    onChange={(e) => handlePetChange("what_was_done_today", e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        diagnosisRef.current?.focus();
-                      }
-                    }}
-                  />
+                  <Textarea ref={whatDoneRef} placeholder="Examination, procedures performed..." rows={3} value={currentPet.what_was_done_today} onChange={(e) => handlePetChange("what_was_done_today", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); diagnosisRef.current?.focus(); } }} />
                 </div>
                 <div className="space-y-2">
                   <Label>Diagnosis</Label>
-                  <Textarea 
-                    ref={diagnosisRef}
-                    placeholder="Diagnosis details..." 
-                    rows={3}
-                    value={currentPet.diagnosis}
-                    onChange={(e) => handlePetChange("diagnosis", e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        treatmentRef.current?.focus();
-                      }
-                    }}
-                  />
+                  <Textarea ref={diagnosisRef} placeholder="Diagnosis details..." rows={3} value={currentPet.diagnosis} onChange={(e) => handlePetChange("diagnosis", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); treatmentRef.current?.focus(); } }} />
                 </div>
                 <div className="space-y-2">
                   <Label>Treatment</Label>
-                  <Textarea 
-                    ref={treatmentRef}
-                    placeholder="Prescribed treatment, medications..." 
-                    rows={3}
-                    value={currentPet.treatment}
-                    onChange={(e) => handlePetChange("treatment", e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        followUpRef.current?.focus();
-                      }
-                    }}
-                  />
+                  <Textarea ref={treatmentRef} placeholder="Prescribed treatment, medications..." rows={3} value={currentPet.treatment} onChange={(e) => handlePetChange("treatment", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); followUpRef.current?.focus(); } }} />
                 </div>
                 <div className="space-y-2">
                   <Label>Follow-up Date</Label>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button
-                        ref={followUpRef}
-                        variant="outline"
-                        className={cn("w-full justify-start text-left font-normal", !currentPet.follow_up_date && "text-muted-foreground")}
-                      >
+                      <Button ref={followUpRef} variant="outline" className={cn("w-full justify-start text-left font-normal", !currentPet.follow_up_date && "text-muted-foreground")}>
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {currentPet.follow_up_date ? format(currentPet.follow_up_date, "PPP") : "Pick follow-up date"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar 
-                        mode="single" 
-                        selected={currentPet.follow_up_date}
-                        onSelect={(date) => handlePetChange("follow_up_date", date)}
-                        initialFocus 
-                        className="p-3 pointer-events-auto"
-                      />
+                      <Calendar mode="single" selected={currentPet.follow_up_date} onSelect={(date) => handlePetChange("follow_up_date", date)} initialFocus className="p-3 pointer-events-auto" />
                     </PopoverContent>
                   </Popover>
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                <Label className="flex items-center gap-1"><Paperclip size={14} /> Today's Visit Attachment (PDF / Image)</Label>
-                <Input 
-                  ref={todayVisitRef}
-                  type="file" 
-                  accept=".pdf,image/*"
+                  <Label className="flex items-center gap-1"><Paperclip size={14} /> Today's Visit Attachment (PDF / Image)</Label>
+                  <Input ref={todayVisitRef} type="file" accept=".pdf,image/*"
                     onChange={(e) => {
                       const file = e.target.files?.[0] || null;
-                      handlePetChange("today_visit_file", file as any);
+                      handlePetChange("today_visit_file", file);
                       handlePetChange("today_visit_filename", file?.name || "");
-                    }}
-                  />
-                  {currentPet.today_visit_filename && (
-                    <p className="text-xs text-muted-foreground">Selected: {currentPet.today_visit_filename}</p>
-                  )}
+                    }} />
+                  {currentPet.today_visit_filename && <p className="text-xs text-muted-foreground">Selected: {currentPet.today_visit_filename}</p>}
                 </div>
               </div>
             </CardContent>
@@ -768,7 +530,7 @@ const Index = () => {
                   <div key={pet.id}>
                     <h3 className="font-semibold">Pet {pets.length > 1 ? `#${idx + 1}` : ""}: {pet.pet_name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {pet.type} | {pet.gender} | {pet.age || "—"} | {pet.weight_kg ? `${pet.weight_kg}kg` : "—"} | Spayed: {pet.spayed_neutered || "—"}
+                      {pet.type} | {pet.gender} | {calculateAge(pet.birth_date)} | {pet.weight_kg ? `${pet.weight_kg}kg` : "—"} | Spayed: {pet.spayed_neutered || "—"}
                     </p>
                     {pet.disease_history && <p className="text-sm text-muted-foreground"><strong>Diseases:</strong> {pet.disease_history}</p>}
                     {pet.diagnosis && <p className="text-sm text-muted-foreground"><strong>Diagnosis:</strong> {pet.diagnosis}</p>}
@@ -780,15 +542,13 @@ const Index = () => {
           </Card>
         )}
 
-        {/* Navigation Buttons */}
+        {/* Navigation */}
         <div className="flex justify-between mb-12">
           <Button variant="outline" onClick={handleBack} disabled={step === 1}>
             <ArrowLeft size={16} className="mr-2" /> Back
           </Button>
           {step < 5 ? (
-            <Button onClick={handleNext}>
-              Next <ArrowRight size={16} className="ml-2" />
-            </Button>
+            <Button onClick={handleNext}>Next <ArrowRight size={16} className="ml-2" /></Button>
           ) : (
             <Button onClick={handleSubmit} disabled={isSubmitting} className="bg-accent text-accent-foreground">
               {isSubmitting ? "Saving..." : "Submit"} <Check size={16} className="ml-2" />

@@ -101,29 +101,28 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
   const [pet, setPet] = useState<PetFields>(emptyPet());
 
   // Refs for focus management
-  const ownerNameRef = useRef<HTMLInputElement>(null);
-  const mobileRef = useRef<HTMLInputElement>(null);
-  const addressRef = useRef<HTMLInputElement>(null);
-  const petNameRef = useRef<HTMLInputElement>(null);
-  const birthDateRef = useRef<HTMLButtonElement>(null);
-  const typeRef = useRef<HTMLButtonElement>(null);
-  const genderRef = useRef<HTMLButtonElement>(null);
-  const spayedRef = useRef<HTMLButtonElement>(null);
-  const weightRef = useRef<HTMLInputElement>(null);
-  const diseaseRef = useRef<HTMLTextAreaElement>(null);
+  const ownerNameRef   = useRef<HTMLInputElement>(null);
+  const mobileRef      = useRef<HTMLInputElement>(null);
+  const addressRef     = useRef<HTMLInputElement>(null);
+  const petNameRef     = useRef<HTMLInputElement>(null);
+  const birthDateRef   = useRef<HTMLButtonElement>(null);
+  const typeRef        = useRef<HTMLButtonElement>(null);
+  const genderRef      = useRef<HTMLButtonElement>(null);
+  const spayedRef      = useRef<HTMLButtonElement>(null);
+  const weightRef      = useRef<HTMLInputElement>(null);
+  const diseaseRef     = useRef<HTMLTextAreaElement>(null);
   const vaccinationRef = useRef<HTMLTextAreaElement>(null);
   const diagnosticsRef = useRef<HTMLInputElement>(null);
-  const whatDoneRef = useRef<HTMLTextAreaElement>(null);
-  const diagnosisRef = useRef<HTMLTextAreaElement>(null);
-  const treatmentRef = useRef<HTMLTextAreaElement>(null);
-  const followUpRef = useRef<HTMLButtonElement>(null);
-  const todayVisitRef = useRef<HTMLInputElement>(null);
+  const whatDoneRef    = useRef<HTMLTextAreaElement>(null);
+  const diagnosisRef   = useRef<HTMLTextAreaElement>(null);
+  const treatmentRef   = useRef<HTMLTextAreaElement>(null);
+  const followUpRef    = useRef<HTMLButtonElement>(null);
+  const todayVisitRef  = useRef<HTMLInputElement>(null);
 
   // ── Fetch on open ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!isOpen || !ownerId) return;
-    // In "add pet" mode start at step 2 (skip owner step — owner already exists)
     setStep(isAddPetMode ? 2 : 1);
     fetchData();
   }, [isOpen, ownerId, petId]);
@@ -131,7 +130,6 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // Always fetch owner info so the owner fields are pre-filled
       const ownerRes = await fetch(`${API_BASE}/api/owners/${ownerId}`);
       if (!ownerRes.ok) throw new Error("Failed to fetch owner");
       const ownerData = (await ownerRes.json()).data;
@@ -143,7 +141,6 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
       });
 
       if (!isAddPetMode && petId) {
-        // Edit mode: fetch the specific pet
         const petRes = await fetch(`${API_BASE}/api/owners/${ownerId}/pets/${petId}`);
         if (!petRes.ok) throw new Error("Failed to fetch pet");
         const petData = (await petRes.json()).data;
@@ -173,7 +170,6 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
           follow_up_date:      petData.follow_up_date ? new Date(petData.follow_up_date) : undefined,
         });
       } else {
-        // Add mode: fresh empty pet
         setPet(emptyPet());
       }
     } catch {
@@ -187,41 +183,23 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
   // Focus first input on step change
   useEffect(() => {
     if (!isOpen) return;
-    
-    if (step === 1 && !isAddPetMode) {
-      setTimeout(() => ownerNameRef.current?.focus(), 100);
-    } else if (step === 2) {
-      setTimeout(() => petNameRef.current?.focus(), 100);
-    } else if (step === 3) {
-      setTimeout(() => diseaseRef.current?.focus(), 100);
-    } else if (step === 4) {
-      setTimeout(() => whatDoneRef.current?.focus(), 100);
-    }
+    if (step === 1 && !isAddPetMode) setTimeout(() => ownerNameRef.current?.focus(), 100);
+    else if (step === 2)             setTimeout(() => petNameRef.current?.focus(),   100);
+    else if (step === 3)             setTimeout(() => diseaseRef.current?.focus(),   100);
+    else if (step === 4)             setTimeout(() => whatDoneRef.current?.focus(),  100);
   }, [step, isOpen, isAddPetMode]);
 
-  // ── Enhanced Enter key handler ──────────────────────────────────────────────
+  // ── Enter key handler ──────────────────────────────────────────────────────
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey && isOpen && !isSubmitting && !isLoading) {
         const target = e.target as HTMLElement;
-        
-        // Allow Enter in textareas for new lines
-        if (target.tagName === 'TEXTAREA') {
-          return;
-        }
-        
+        if (target.tagName === 'TEXTAREA') return;
         e.preventDefault();
-        
-        // If on last step, submit
-        if (step === 5) {
-          handleSubmit();
-          return;
-        }
-        
-        // Define focus order for each step based on mode
+        if (step === 5) { handleSubmit(); return; }
+
         let focusOrder: (HTMLElement | null)[] = [];
-        
         if (step === 1 && !isAddPetMode) {
           focusOrder = [ownerNameRef.current, mobileRef.current, addressRef.current];
         } else if (step === 2) {
@@ -231,27 +209,21 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
         } else if (step === 4) {
           focusOrder = [whatDoneRef.current, diagnosisRef.current, treatmentRef.current, followUpRef.current, todayVisitRef.current];
         }
-        
+
         const currentIndex = focusOrder.findIndex(field => field === target);
-        
-        // If current field is found and it's not the last field, focus next field
         if (currentIndex !== -1 && currentIndex < focusOrder.length - 1) {
           const nextField = focusOrder[currentIndex + 1];
           if (nextField) {
             nextField.focus();
-            // For select triggers, simulate click to open dropdown
-            if (nextField.getAttribute('role') === 'combobox' || 
-                (nextField.classList && nextField.classList.contains('justify-between'))) {
+            if (nextField.getAttribute('role') === 'combobox' || nextField.classList.contains('justify-between')) {
               (nextField as HTMLButtonElement).click();
             }
           }
         } else {
-          // At the last field or field not found, move to next step
           handleNext();
         }
       }
     };
-    
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [step, ownerFields, pet, isOpen, isSubmitting, isLoading, isAddPetMode]);
@@ -272,41 +244,26 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
 
   const handleNext = () => {
     if (step === 1 && !isAddPetMode) {
-      if (!ownerFields.owner_name.trim()) { 
-        toast.error("Owner name is required"); 
-        ownerNameRef.current?.focus();
-        return; 
-      }
-      if (!ownerFields.mobile_number.trim()) { 
-        toast.error("Mobile number is required"); 
-        mobileRef.current?.focus();
-        return; 
-      }
+      if (!ownerFields.owner_name.trim())    { toast.error("Owner name is required");   ownerNameRef.current?.focus(); return; }
+      if (!ownerFields.mobile_number.trim()) { toast.error("Mobile number is required"); mobileRef.current?.focus();   return; }
       setStep(2);
     } else if (step === 2) {
-      if (!pet.pet_name.trim()) { 
-        toast.error("Pet name is required"); 
-        petNameRef.current?.focus();
-        return; 
-      }
+      if (!pet.pet_name.trim()) { toast.error("Pet name is required"); petNameRef.current?.focus(); return; }
       setStep(3);
-    } else if (step === 3) { 
+    } else if (step === 3) {
       setStep(4);
-    } else if (step === 4) { 
+    } else if (step === 4) {
       setStep(5);
     }
   };
 
-  const handleBack = () => {
-    if (step > minStep) setStep(step - 1);
-  };
+  const handleBack = () => { if (step > minStep) setStep(step - 1); };
 
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      // Build pet FormData
       const petFd = new FormData();
       petFd.append("pet_name", pet.pet_name);
       if (pet.birth_date)          petFd.append("birth_date",          format(pet.birth_date, "yyyy-MM-dd"));
@@ -324,14 +281,13 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
       if (pet.diagnostics_file)    petFd.append("diagnostics",         pet.diagnostics_file);
       if (pet.today_visit_file)    petFd.append("today_visit",         pet.today_visit_file);
 
-      // Always update owner info (name / mobile / address may have changed)
+      // Always update owner info
       await fetch(`${API_BASE}/api/owners/${ownerId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(ownerFields),
       });
 
-      // Add new pet  OR  update existing pet
       const petUrl    = isAddPetMode
         ? `${API_BASE}/api/owners/${ownerId}/pets`
         : `${API_BASE}/api/pets/${petId}`;
@@ -378,7 +334,7 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
             {/* Step Progress */}
             <div className="flex items-center justify-center gap-2 mb-8">
               {steps.map((s, i) => {
-                if (isAddPetMode && i === 0) return null; // hide "Owner" step pill in add-pet mode
+                if (isAddPetMode && i === 0) return null;
                 return (
                   <div key={s} className="flex items-center gap-2">
                     <div className={cn(
@@ -396,12 +352,10 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
               })}
             </div>
 
-            {/* Hint text for Enter key navigation */}
             <div className="mb-4 text-xs text-center text-muted-foreground">
               💡 Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs font-mono">Enter</kbd> to move to next field / step
             </div>
 
-            {/* Context banner in add-pet mode */}
             {isAddPetMode && (
               <div className="mb-4 rounded-md bg-muted/30 border border-border px-4 py-2 text-sm text-muted-foreground">
                 Adding a new pet for <strong className="text-foreground">{ownerFields.owner_name}</strong>
@@ -423,27 +377,18 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Owner Name *</Label>
-                      <Input 
-                        ref={ownerNameRef}
-                        value={ownerFields.owner_name}
-                        onChange={(e) => handleOwnerChange("owner_name", e.target.value)}
-                      />
+                      <Input ref={ownerNameRef} value={ownerFields.owner_name}
+                        onChange={(e) => handleOwnerChange("owner_name", e.target.value)} />
                     </div>
                     <div className="space-y-2">
                       <Label>Mobile Number *</Label>
-                      <Input 
-                        ref={mobileRef}
-                        value={ownerFields.mobile_number}
-                        onChange={(e) => handleOwnerChange("mobile_number", e.target.value)}
-                      />
+                      <Input ref={mobileRef} value={ownerFields.mobile_number}
+                        onChange={(e) => handleOwnerChange("mobile_number", e.target.value)} />
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label>Address</Label>
-                      <Input 
-                        ref={addressRef}
-                        value={ownerFields.address}
-                        onChange={(e) => handleOwnerChange("address", e.target.value)}
-                      />
+                      <Input ref={addressRef} value={ownerFields.address}
+                        onChange={(e) => handleOwnerChange("address", e.target.value)} />
                     </div>
                   </div>
                 </CardContent>
@@ -465,21 +410,15 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="space-y-2">
                       <Label>Pet Name *</Label>
-                      <Input 
-                        ref={petNameRef}
-                        value={pet.pet_name}
-                        onChange={(e) => handlePetChange("pet_name", e.target.value)}
-                      />
+                      <Input ref={petNameRef} value={pet.pet_name}
+                        onChange={(e) => handlePetChange("pet_name", e.target.value)} />
                     </div>
                     <div className="space-y-2">
                       <Label>Birthdate</Label>
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button 
-                            ref={birthDateRef}
-                            variant="outline" 
-                            className={cn("w-full justify-start text-left font-normal", !pet.birth_date && "text-muted-foreground")}
-                          >
+                          <Button ref={birthDateRef} variant="outline"
+                            className={cn("w-full justify-start text-left font-normal", !pet.birth_date && "text-muted-foreground")}>
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {pet.birth_date ? format(pet.birth_date, "PPP") : "Pick a date"}
                           </Button>
@@ -489,8 +428,7 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                             onSelect={(date) => {
                               handlePetChange("birth_date", date);
                               handlePetChange("age", calculateAge(date));
-                            }}
-                            initialFocus />
+                            }} initialFocus />
                         </PopoverContent>
                       </Popover>
                     </div>
@@ -501,9 +439,7 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                     <div className="space-y-2">
                       <Label>Type</Label>
                       <Select value={pet.type} onValueChange={(v) => handlePetChange("type", v)}>
-                        <SelectTrigger ref={typeRef}>
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
+                        <SelectTrigger ref={typeRef}><SelectValue placeholder="Select type" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cat">🐱 Cat</SelectItem>
                           <SelectItem value="dog">🐶 Dog</SelectItem>
@@ -513,36 +449,30 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                     <div className="space-y-2">
                       <Label>Gender</Label>
                       <Select value={pet.gender} onValueChange={(v) => handlePetChange("gender", v)}>
-                        <SelectTrigger ref={genderRef}>
-                          <SelectValue placeholder="Select gender" />
-                        </SelectTrigger>
+                        <SelectTrigger ref={genderRef}><SelectValue placeholder="Select gender" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="male">Male</SelectItem>
                           <SelectItem value="female">Female</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {/* ✅ FIXED: Spayed/Neutered was missing from Add Pet mode — now always shown */}
                     <div className="space-y-2">
                       <Label>Spayed / Neutered</Label>
                       <Select value={pet.spayed_neutered} onValueChange={(v) => handlePetChange("spayed_neutered", v)}>
-                        <SelectTrigger ref={spayedRef}>
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
+                        <SelectTrigger ref={spayedRef}><SelectValue placeholder="Select" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="yes">Yes</SelectItem>
                           <SelectItem value="no">No</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+
                     <div className="space-y-2">
                       <Label>Weight (kg)</Label>
-                      <Input 
-                        ref={weightRef}
-                        type="number" 
-                        step="0.1" 
-                        value={pet.weight_kg}
-                        onChange={(e) => handlePetChange("weight_kg", e.target.value)}
-                      />
+                      <Input ref={weightRef} type="number" step="0.1" value={pet.weight_kg}
+                        onChange={(e) => handlePetChange("weight_kg", e.target.value)} />
                     </div>
                   </div>
                 </CardContent>
@@ -564,46 +494,25 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Disease History</Label>
-                      <Textarea 
-                        ref={diseaseRef}
-                        rows={3} 
-                        value={pet.disease_history}
+                      <Textarea ref={diseaseRef} rows={3} value={pet.disease_history}
                         onChange={(e) => handlePetChange("disease_history", e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            vaccinationRef.current?.focus();
-                          }
-                        }}
-                      />
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); vaccinationRef.current?.focus(); } }} />
                     </div>
                     <div className="space-y-2">
                       <Label>Vaccination History</Label>
-                      <Textarea 
-                        ref={vaccinationRef}
-                        rows={3} 
-                        value={pet.vaccination_history}
+                      <Textarea ref={vaccinationRef} rows={3} value={pet.vaccination_history}
                         onChange={(e) => handlePetChange("vaccination_history", e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            diagnosticsRef.current?.focus();
-                          }
-                        }}
-                      />
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); diagnosticsRef.current?.focus(); } }} />
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <Label className="flex items-center gap-1"><Paperclip size={14} /> Diagnostics (PDF)</Label>
-                      <Input 
-                        ref={diagnosticsRef}
-                        type="file" 
-                        accept=".pdf"
+                      {/* ✅ FIXED: accept now includes images, not just pdf */}
+                      <Label className="flex items-center gap-1"><Paperclip size={14} /> Diagnostics (PDF / Image)</Label>
+                      <Input ref={diagnosticsRef} type="file" accept=".pdf,image/*"
                         onChange={(e) => {
                           const file = e.target.files?.[0] || null;
                           handlePetChange("diagnostics_file", file as any);
                           handlePetChange("diagnostics_filename", file?.name || "");
-                        }}
-                      />
+                        }} />
                       {pet.diagnostics_filename && (
                         <p className="text-xs text-muted-foreground">New file: {pet.diagnostics_filename}</p>
                       )}
@@ -631,81 +540,47 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>What was done today</Label>
-                      <Textarea 
-                        ref={whatDoneRef}
-                        rows={3} 
-                        value={pet.what_was_done_today}
+                      <Textarea ref={whatDoneRef} rows={3} value={pet.what_was_done_today}
                         onChange={(e) => handlePetChange("what_was_done_today", e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            diagnosisRef.current?.focus();
-                          }
-                        }}
-                      />
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); diagnosisRef.current?.focus(); } }} />
                     </div>
                     <div className="space-y-2">
                       <Label>Diagnosis</Label>
-                      <Textarea 
-                        ref={diagnosisRef}
-                        rows={3} 
-                        value={pet.diagnosis}
+                      <Textarea ref={diagnosisRef} rows={3} value={pet.diagnosis}
                         onChange={(e) => handlePetChange("diagnosis", e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            treatmentRef.current?.focus();
-                          }
-                        }}
-                      />
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); treatmentRef.current?.focus(); } }} />
                     </div>
                     <div className="space-y-2">
                       <Label>Treatment</Label>
-                      <Textarea 
-                        ref={treatmentRef}
-                        rows={3} 
-                        value={pet.treatment}
+                      <Textarea ref={treatmentRef} rows={3} value={pet.treatment}
                         onChange={(e) => handlePetChange("treatment", e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            followUpRef.current?.focus();
-                          }
-                        }}
-                      />
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); followUpRef.current?.focus(); } }} />
                     </div>
                     <div className="space-y-2">
                       <Label>Follow-up Date</Label>
                       <Popover>
                         <PopoverTrigger asChild>
-                          <Button 
-                            ref={followUpRef}
-                            variant="outline" 
-                            className={cn("w-full justify-start text-left font-normal", !pet.follow_up_date && "text-muted-foreground")}
-                          >
+                          <Button ref={followUpRef} variant="outline"
+                            className={cn("w-full justify-start text-left font-normal", !pet.follow_up_date && "text-muted-foreground")}>
                             <CalendarIcon className="mr-2 h-4 w-4" />
                             {pet.follow_up_date ? format(pet.follow_up_date, "PPP") : "Pick follow-up date"}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar mode="single" selected={pet.follow_up_date}
-                            onSelect={(date) => handlePetChange("follow_up_date", date)}
-                            initialFocus />
+                            onSelect={(date) => handlePetChange("follow_up_date", date)} initialFocus />
                         </PopoverContent>
                       </Popover>
                     </div>
                     <div className="space-y-2 md:col-span-2">
-                      <Label className="flex items-center gap-1"><Paperclip size={14} /> Today's Visit Attachment (PDF)</Label>
-                      <Input 
-                        ref={todayVisitRef}
-                        type="file" 
-                        accept=".pdf"
+                      {/* ✅ FIXED: accept now includes images, not just pdf */}
+                      <Label className="flex items-center gap-1"><Paperclip size={14} /> Today's Visit Attachment (PDF / Image)</Label>
+                      <Input ref={todayVisitRef} type="file" accept=".pdf,image/*"
                         onChange={(e) => {
                           const file = e.target.files?.[0] || null;
                           handlePetChange("today_visit_file", file as any);
                           handlePetChange("today_visit_filename", file?.name || "");
-                        }}
-                      />
+                        }} />
                       {pet.today_visit_filename && (
                         <p className="text-xs text-muted-foreground">New file: {pet.today_visit_filename}</p>
                       )}
@@ -748,6 +623,12 @@ const EditModal = ({ ownerId, petId, isOpen, onClose, onSuccess }: EditModalProp
                       )}
                       {pet.treatment && (
                         <p className="text-sm text-muted-foreground"><strong>Treatment:</strong> {pet.treatment}</p>
+                      )}
+                      {pet.diagnostics_filename && (
+                        <p className="text-sm text-muted-foreground"><strong>Diagnostics file:</strong> {pet.diagnostics_filename}</p>
+                      )}
+                      {pet.today_visit_filename && (
+                        <p className="text-sm text-muted-foreground"><strong>Today's visit file:</strong> {pet.today_visit_filename}</p>
                       )}
                     </div>
                   </div>
